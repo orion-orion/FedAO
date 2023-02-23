@@ -35,10 +35,11 @@ MANIFEST
 
 # code generated files
 events.*
+*.png
 
 # data
-data/*
-!data/.gitkeep
+fed_pytorch/data
+!fed_pytorch/.gitkeep
 *.pkl
 *.txt
 *.json
