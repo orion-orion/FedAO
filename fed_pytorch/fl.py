@@ -13,7 +13,7 @@ def evaluation_logging(eval_logs, epoch, mod="valid"):
         for i in range(len(eval_logs)):
             avg_eval_val += eval_logs[i][key]
         avg_eval_log[key] = avg_eval_val
-    
+        
     logging.info('ACC: ' + str(avg_eval_log["ACC"]))
        
        
@@ -48,7 +48,7 @@ def run_fl(clients, args):
 
         # assign the avg weights to global weights
         global_weights = client_weights_sum
-        if epoch % args.eval_interval == 0:
+        if args.val_frac > 0 and epoch % args.eval_interval == 0:
             clients.set_global_weights(global_weights)
             eval_logs = []
             for c_id in tqdm(range(args.n_clients), ascii=True):
