@@ -16,7 +16,7 @@ def arg_parse():
 
     # dataset part
     parser.add_argument('--dataset', type=str, default='CIFAR10',
-                        help='dataset, possible are `CIFAR10`, `CIFAR100`')
+                        help='dataset, possible are `EMNIST`, `FashionMNST`,``CIFAR10`, `CIFAR100`')
     parser.add_argument('--n_clients', type=int, default=10)
     parser.add_argument('--train_frac', help='fraction of train samples', type=float, default=0.9)
     parser.add_argument('--val_frac', help='fraction of validation samples in train samples', type=float, default=0.1)      
@@ -30,15 +30,15 @@ def arg_parse():
     parser.add_argument('--alpha', help = 'the parameter of dirichalet', type=float, default=1.0)
 
     # train part
-    parser.add_argument('--lr', type=float, default=0.1, help='Applies to SGD.')
-    parser.add_argument('--batch_size', type=int, default=128, help='Training batch size.')
+    parser.add_argument('--lr', type=float, default=0.1, help='applies to SGD')
+    parser.add_argument('--batch_size', type=int, default=128, help='training batch size')
     parser.add_argument('--cuda', type=bool, default=torch.cuda.is_available())
     parser.add_argument('--gpu', type=str, default='0', help='use of gpu')
     parser.add_argument('--log_dir', type=str, default='log', help='directory of logs')
-    parser.add_argument('--frac', type=float, default=1, help='Fraction of participating clients')
-    parser.add_argument('--global_epochs', type=int, default=200, help='Number of global training epochs.')
-    parser.add_argument('--local_epochs', type=int, default=1, help='Number of local training epochs.')
-    parser.add_argument('--eval_interval', type=int, default=1, help='Interval of evalution')
+    parser.add_argument('--frac', type=float, default=1, help='fraction of participating clients')
+    parser.add_argument('--global_epochs', type=int, default=200, help='number of global training epochs')
+    parser.add_argument('--local_epochs', type=int, default=1, help='number of local training epochs')
+    parser.add_argument('--eval_interval', type=int, default=1, help='interval of evalution')
     parser.add_argument('--seed', type=int, default=42, help='random seed')
    
    

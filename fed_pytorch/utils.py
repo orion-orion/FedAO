@@ -63,7 +63,7 @@ def load_dataset(args):
 
     display_data_distribution(client_idcs, labels, data_info['num_classes'], args.n_clients, args)
 
-    client_train_idcs, client_test_idcs, client_val_idcs = [], [], []
+    client_train_idcs, client_test_idcs, client_valid_idcs = [], [], []
     # 在本地划分成train，val, test集合前要先shuffle
     for idcs in client_idcs:
         train_idcs, test_idcs =\
@@ -72,21 +72,21 @@ def load_dataset(args):
                 train_size=args.train_frac,
                 random_state=args.seed
             )
-        if args.val_frac > 0:
-            train_idcs, val_idcs = \
+        if args.valid_frac > 0:
+            train_idcs, valid_idcs = \
                 train_test_split(
                     train_idcs,
                     train_size=1.-args.val_frac,
                     random_state=args.seed
                 )
-            client_val_idcs.append(val_idcs)
+            client_valid_idcs.append(valid_idcs)
         else:
-            client_val_idcs.append([])
+            client_valid_idcs.append([])
         client_train_idcs.append(train_idcs)
         client_test_idcs.append(test_idcs)
 
     client_train_datasets = [CustomSubset(dataset, idcs) for idcs in client_train_idcs]
-    client_valid_datasets = [CustomSubset(dataset, idcs) for idcs in client_val_idcs]
+    client_valid_datasets = [CustomSubset(dataset, idcs) for idcs in client_valid_idcs]
     client_test_datasets = [CustomSubset(dataset, idcs) for idcs in client_test_idcs]
 
     return client_train_datasets, client_valid_datasets, client_test_datasets, data_info
