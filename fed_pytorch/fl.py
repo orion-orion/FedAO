@@ -48,7 +48,7 @@ def run_fl(clients, args):
 
         # assign the avg weights to global weights
         global_weights = client_weights_sum
-        if args.val_frac > 0 and epoch % args.eval_interval == 0:
+        if args.valid_frac > 0 and epoch % args.eval_interval == 0:
             clients.set_global_weights(global_weights)
             eval_logs = []
             for c_id in tqdm(range(args.n_clients), ascii=True):

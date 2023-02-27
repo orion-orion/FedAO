@@ -25,7 +25,33 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
 
+
 __all__ = ['ResNet', 'resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet110', 'resnet1202']
+
+
+def resnet20(in_channels, num_classes):
+    return ResNet(BasicBlock, [3, 3, 3], in_channels, num_classes)
+
+
+def resnet32(in_channels, num_classes):
+    return ResNet(BasicBlock, [5, 5, 5], in_channels, num_classes)
+
+
+def resnet44(in_channels, num_classes):
+    return ResNet(BasicBlock, [7, 7, 7], in_channels, num_classes)
+
+
+def resnet56(in_channels, num_classes):
+    return ResNet(BasicBlock, [9, 9, 9], in_channels, num_classes)
+
+
+def resnet110(in_channels, num_classes):
+    return ResNet(BasicBlock, [18, 18, 18], in_channels, num_classes)
+
+
+def resnet1202(in_channels, num_classes):
+    return ResNet(BasicBlock, [200, 200, 200], in_channels, num_classes)
+
 
 def _weights_init(m):
     classname = m.__class__.__name__
@@ -67,10 +93,16 @@ class BasicBlock(nn.Module):
                 )
 
     def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = F.relu(out)
+        
+        out = self.conv2(out)
+        out = self.bn2(out)
+
         out += self.shortcut(x)
         out = F.relu(out)
+
         return out
 
 
@@ -98,36 +130,20 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = self.layer1(out)
-        out = self.layer2(out)
-        out = self.layer3(out)
-        out = F.avg_pool2d(out, out.size()[3])
-        out = out.view(out.size(0), -1)
-        out = self.linear(out)
+        out = self.conv1(x) # -> (batch, 16, 32, 32)
+        out = self.bn1(out)
+        out = F.relu(out)
+
+        out = self.layer1(out) # -> (batch, 16, 32, 32)
+        out = self.layer2(out) # -> (batch, 32, 16, 16)
+        out = self.layer3(out) # -> (batch, 64, 8, 8)
+
+        out = F.avg_pool2d(out, out.size()[3]) # -> (batch, 64, 1, 1)
+        out = out.view(out.size(0), -1) # -> (batch, 64)
+        out = self.linear(out) # -> (batch, num_classes)
+
         return out
 
 
-def resnet20(in_channels, num_classes):
-    return ResNet(BasicBlock, [3, 3, 3], in_channels, num_classes)
 
-
-def resnet32(in_channels, num_classes):
-    return ResNet(BasicBlock, [5, 5, 5], in_channels, num_classes)
-
-
-def resnet44(in_channels, num_classes):
-    return ResNet(BasicBlock, [7, 7, 7], in_channels, num_classes)
-
-
-def resnet56(in_channels, num_classes):
-    return ResNet(BasicBlock, [9, 9, 9], in_channels, num_classes)
-
-
-def resnet110(in_channels, num_classes):
-    return ResNet(BasicBlock, [18, 18, 18], in_channels, num_classes)
-
-
-def resnet1202(in_channels, num_classes):
-    return ResNet(BasicBlock, [200, 200, 200], in_channels, num_classes)
 

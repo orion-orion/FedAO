@@ -76,7 +76,7 @@ def load_dataset(args):
             train_idcs, valid_idcs = \
                 train_test_split(
                     train_idcs,
-                    train_size=1.-args.val_frac,
+                    train_size=1.-args.valid_frac,
                     random_state=args.seed
                 )
             client_valid_idcs.append(valid_idcs)

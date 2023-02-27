@@ -13,14 +13,14 @@ class Clients:
         self.n_clients = args.n_clients
         
         self.train_dataloaders = [DataLoader(train_datasets[c_id], batch_size=args.batch_size, shuffle=True) for c_id in range(args.n_clients)]
-        self.valid_dataloaders = [DataLoader(valid_datasets[c_id], batch_size=args.batch_size, shuffle=True) for c_id in range(args.n_clients)]
-        self.test_dataloaders = [DataLoader(test_datasets[c_id], batch_size=args.batch_size, shuffle=True) for c_id in range(args.n_clients)]
+        self.valid_dataloaders = [DataLoader(valid_datasets[c_id], batch_size=args.batch_size, shuffle=False) for c_id in range(args.n_clients)]
+        self.test_dataloaders = [DataLoader(test_datasets[c_id], batch_size=args.batch_size, shuffle=False) for c_id in range(args.n_clients)]
 
         # 初始化各client的权重
         client_n_samples_train = [len(train_datasets[c_id]) for c_id in range(args.n_clients)]
         samples_sum_train = sum(client_n_samples_train)
         self.client_train_prop = [len(train_datasets[c_id])/samples_sum_train for c_id in range(args.n_clients)]
-        if args.val_frac > 0:
+        if args.valid_frac > 0:
             client_n_samples_valid = [len(valid_datasets[c_id]) for c_id in range(args.n_clients)]
             samples_sum_valid = sum(client_n_samples_valid)
             self.client_valid_prop = [len(valid_datasets[c_id])/samples_sum_valid for c_id in range(args.n_clients)]
@@ -39,16 +39,16 @@ class Clients:
             for x, y in self.train_dataloaders[c_id]:
                 x, y = x.to(self.device), y.to(self.device)
                 self.optimizer.zero_grad()
+                
                 # Pytorch自带softmax和默认取了mean
                 l = torch.nn.CrossEntropyLoss()(self.model(x), y)
-
                 l.backward()
                 self.optimizer.step()  
                 
                 loss += l.item() * y.shape[0]
                 n_samples += y.shape[0]
-            gc.collect()
 
+            gc.collect()
         logging.info('Global epoch {}/{} - client {} -  Training Loss: {:.3f}'.format(epoch, args.global_epochs, c_id, loss / n_samples))
         return n_samples
     
@@ -64,8 +64,9 @@ class Clients:
             for x, y in dataloader:
                 x, y = x.to(self.device), y.to(self.device)
                 
-                y_hat = self.model(x)
-                pred = torch.argmax(y_hat.data, 1)
+                logits = self.model(x)
+                pred = torch.argmax(logits.data, 1)
+                
                 correct += (pred == y).sum().item()
                 n_samples += y.shape[0]
 

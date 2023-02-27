@@ -19,7 +19,7 @@ def arg_parse():
                         help='dataset, possible are `EMNIST`, `FashionMNST`,``CIFAR10`, `CIFAR100`')
     parser.add_argument('--n_clients', type=int, default=10)
     parser.add_argument('--train_frac', help='fraction of train samples', type=float, default=0.9)
-    parser.add_argument('--val_frac', help='fraction of validation samples in train samples', type=float, default=0.1)      
+    parser.add_argument('--valid_frac', help='fraction of validation samples in train samples', type=float, default=0.1)      
     parser.add_argument('--pathological_split',help='if selected, the dataset will be split as in' \
         '"Communication-Efficient Learning of Deep Networks from Decentralized Data";'
              'i.e., each client will receive `n_shards` of dataset, where each shard contains at most two classes',
