@@ -1,147 +1,164 @@
 import tensorflow as tf
-import numpy as np
-from tensorflow.compat.v1.train import AdamOptimizer
+from tensorflow.python.training import moving_averages
 import os
 
-class ConvNet(tf.Module):
-    def __init__(self, graph, input_size, num_classes, num_channels, learning_rate, args):
-        """
-            Construct the AlexNet model.
-            graph: The tf computation graph (`tf.Graph`)
-            input_size: The size of input image (`int`)
-            num_classes: The number of output classes (`int`)
-            num_channels: The number of input channels (`int`)
-            learning_rate: Learning rate for optimizer (`float`)
-            args: Training arguments (Namespace)
-        """
-        self.config = tf.ConfigProto()
+
+def resnet20(graph, args, optimizer_fn, input_size, num_classes, in_channels):
+    return ResNet(graph, args, optimizer_fn, [3, 3, 3], input_size, num_classes, in_channels)
+
+
+def resnet32(graph, args, optimizer_fn, input_size, num_classes, in_channels):
+    return ResNet(graph, args, optimizer_fn, [5, 5, 5], input_size, num_classes, in_channels)
+
+
+def resnet44(graph, args, optimizer_fn, input_size, num_classes, in_channels):
+    return ResNet(graph, args, optimizer_fn, [7, 7, 7], input_size, in_channels, num_classes)
+
+
+def resnet56(graph, args, optimizer_fn, input_size, num_classes, in_channels):
+    return ResNet(graph, args, optimizer_fn, [9, 9, 9], input_size, in_channels, num_classes)
+
+
+def resnet110(graph, args, optimizer_fn, input_size, num_classes, in_channels):
+    return ResNet(graph, args, optimizer_fn, [18, 18, 18], input_size, in_channels, num_classes)
+
+
+def resnet1202(graph, args, optimizer_fn, input_size, num_classes, in_channels):
+    return ResNet(graph, args, optimizer_fn, [200, 200, 200], input_size, in_channels, num_classes)
+
+
+class ResNet(tf.Module):
+    def __init__(self, graph, args, optimizer_fn, num_blocks, input_size=32, num_classes=10, in_channels=3):
+        self.config = tf.compat.v1.ConfigProto()
         if args.cuda:
             os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
             self.config.gpu_options.allow_growth = True
+        
+        self.graph = graph
+        self.optimizer = optimizer_fn()
+        self.num_blocks = num_blocks
+        self.input_size = input_size
+        self.in_channels = in_channels 
+        self.num_classes= num_classes
+        self._build_model()
 
-        with graph.as_default():
-            self.x = tf.placeholder(tf.float32, [None, input_size, input_size, num_channels], name='x')
-            self.y = tf.placeholder(tf.float32, [None, num_classes], name='y')
+    def _build_model(self):
+        with self.graph.as_default():
+            self.x = tf.compat.v1.placeholder(tf.float32, [None, self.input_size, self.input_size, self.in_channels], name="x")
+            self.y = tf.compat.v1.placeholder(tf.float32, [None, self.num_classes], name="y")
+                
+            self.in_planes = 16
+            
+            conv1 = conv_layer(self.x, 16, 3, 1, scope="conv1") # -> (batch, 32, 32, 16)
+            bn1 = tf.nn.relu(batch_norm(conv1, scope="bn1"))
 
-            # 1st Layer: Conv (w ReLu) -> Lrn -> Pool
-            conv1 = conv(self.x, 5, 5, 32, 1, 1, name='conv1')
-            pool1 = max_pool(conv1, 2, 2, 2, 2, padding='VALID', name='pool1')
+            block2 = self._layer(bn1, 16, self.num_blocks[0], init_stride=1, scope="layer2") # -> (batch, 32, 32, 16)
+            block3 = self._layer(block2, 32, self.num_blocks[1], init_stride=2, scope="layer3") # -> (batch, 16, 16, 32)
+            block4 = self._layer(block3, 64, self.num_blocks[2], init_stride=2, scope="layer4") # -> (batch, 8, 8, 64)
 
-            # 2nd Layer: Conv (w ReLu)  -> Lrn -> Pool
-            conv2 = conv(pool1, 5, 5, 64, 1, 1, name='conv2')
-            pool2 = max_pool(conv2, 2, 2, 2, 2, padding='VALID', name='pool2')
+            avgpool5 = pool_layer(block4, block4.get_shape()[-1], block4.get_shape()[-1], name="avgpool5", pooling_Mode = 'avg_pool') # -> (batch, 1, 1, 64)
+            spatialsqueeze = tf.squeeze(avgpool5, [1, 2], name="spatial_squeeze") # -> (batch, 64)
+            self.logits = fc_layer(spatialsqueeze, self.num_classes, "fc6") # -> (batch, num_classes)
+            
+            with tf.compat.v1.variable_scope('loss'):
+                losses = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.y)
+                self.loss_op = tf.reduce_mean(losses)
 
-            if input_size == 32:
-                # 3rd Layer: Flatten -> FC (w ReLu) -> Dropout
-                # flattened = tf.reshape(pool5, [-1, 4*4*64])
-                # fc1 = fc(flattened, 5*5*64, 4096, name='fc6')
-                flattened = tf.reshape(pool2, [-1, 8*8*64])
-                fc1 = fc_layer(flattened, 8*8*64, 2048, name='fc1')
-                # 4th Layer: FC and return unscaled activations
-                logits = fc_layer(fc1, 2048, num_classes, relu=False, name='fc8')
+            with tf.compat.v1.variable_scope('optimizer'):
+                self.train_op = self.optimizer.minimize(self.loss_op)
+
+    def _layer(self, x, planes, num_blocks, init_stride=2, scope="block"):
+        self.expansion = 1
+        with tf.compat.v1.variable_scope(scope):
+            out = self._block(x, self.in_planes, planes, stride=init_stride, scope="block1")
+            self.in_planes = planes * self.expansion
+            strides = [1]*(num_blocks-1)
+            
+            for i, stride in enumerate(strides):
+                out = self._block(out, self.in_planes, planes, stride, scope=("block%s" % (i + 2)))
+                self.in_planes = planes * self.expansion
+
+            return out
+
+    def _block(self, x, in_planes, planes, stride=1, scope="block"):
+        with tf.compat.v1.variable_scope(scope):
+            out = conv_layer(x, planes, kernel_size=3, stride=stride, scope="conv_1")
+            out = batch_norm(out, scope="bn_1")
+            out = tf.nn.relu(out)
+            
+            out = conv_layer(out, planes, kernel_size=3, stride=1, scope="conv_2")
+            out = batch_norm(out, scope="bn_2")
+
+            if stride != 1 or in_planes != planes: #inplaces !+ plances
+                shortcut = conv_layer(x, self.expansion * planes, kernel_size=1, stride=stride, scope="conv_3")
+                shortcut = batch_norm(shortcut, scope="bn_3")
             else:
-                raise ValueError("Invalid dataset!")
+                shortcut = x
 
-            # loss and optimizer
-            self.loss_op = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits,
-                                                            labels=self.y))
-            optimizer = AdamOptimizer(
-                learning_rate=learning_rate)
-            self.train_op = optimizer.minimize(self.loss_op)
+            out += shortcut
+            out = tf.nn.relu(out)
 
-            # Evaluate model
-            self.y_hat = tf.nn.softmax(logits)
+            return out
+        
 
-
-def conv(x, filter_height, filter_width, num_filters,
-            stride_y, stride_x, name, padding='SAME', groups=1):
-    """Create a convolution layer.
-    Adapted from: https://github.com/ethereon/caffe-tensorflow
-    """
-    # Get number of input channels
-    input_channels = int(x.get_shape()[-1])
-
-    # Create lambda function for the convolution
-    convolve = lambda i, k: tf.nn.conv2d(
-        i, k, strides=[1, stride_y, stride_x, 1], padding=padding)
-
-    with tf.variable_scope(name) as scope:
-        # Create tf variables for the weights and biases of the conv layer
-        weights = tf.get_variable('weights',
-                                    shape=[
-                                        filter_height, filter_width,
-                                        input_channels / groups, num_filters
-                                    ])
-        biases = tf.get_variable('biases', shape=[num_filters])
-
-    if groups == 1:
-        conv = convolve(x, weights)
-
-    # In the cases of multiple groups, split inputs & weights and
-    else:
-        # Split input and weights and convolve them separately
-        input_groups = tf.split(axis=3, num_or_size_splits=groups, value=x)
-        weight_groups = tf.split(axis=3,
-                                    num_or_size_splits=groups,
-                                    value=weights)
-        output_groups = [
-            convolve(i, k) for i, k in zip(input_groups, weight_groups)
-        ]
-
-        # Concat the convolved output together again
-        conv = tf.concat(axis=3, values=output_groups)
-
-    # Add biases
-    bias = tf.reshape(tf.nn.bias_add(conv, biases), tf.shape(conv))
-
-    # Apply relu function
-    relu = tf.nn.relu(bias, name=scope.name)
-
-    return relu
+def variable_weight(name, shape, initializer, trainable=True):
+    return tf.compat.v1.get_variable(name, shape=shape, dtype=tf.float32,
+                           initializer=initializer, trainable=trainable)
 
 
-def fc_layer(x, input_size, output_size, name, relu=True, k=20):
-    """Create a fully connected layer."""
+def conv_layer(x, num_outputs, kernel_size, stride=1, scope="conv2d"):
+    input_channels = x.get_shape()[-1]
 
-    with tf.variable_scope(name) as scope:
-        # Create tf variables for the weights and biases.
-        W = tf.get_variable('weights', shape=[input_size, output_size])
-        b = tf.get_variable('biases', shape=[output_size])
-        # Matrix multiply weights and inputs and add biases.
-        z = tf.nn.bias_add(tf.matmul(x, W), b, name=scope.name)
-
-    if relu:
-        # Apply ReLu non linearity.
-        a = tf.nn.relu(z)
-        return a
-
-    else:
-        return z
+    with tf.compat.v1.variable_scope(scope):
+        kernel = variable_weight("kernel", [kernel_size, kernel_size, input_channels, num_outputs], 
+            tf.contrib.layers.xavier_initializer_conv2d())
+            
+        return tf.nn.conv2d(x, kernel, strides=[1, stride, stride, 1], padding="SAME")
 
 
-def max_pool(x, \
-                filter_height, filter_width,
-                stride_y, stride_x,
-                name, padding='SAME'):
-    """Create a max pooling layer."""
-    return tf.nn.max_pool2d(x,
-        ksize=[1, filter_height, filter_width, 1],
-        strides=[1, stride_y, stride_x, 1],
-        padding=padding,
-        name=name)
+def fc_layer(x, num_outputs, scope="fc"):
+    input_channels = x.get_shape()[-1]
+    
+    with tf.compat.v1.variable_scope(scope):
+        W = variable_weight("weight", [input_channels, num_outputs], 
+            tf.contrib.layers.xavier_initializer())
+        b = variable_weight("bias", [num_outputs,], 
+            tf.zeros_initializer())
+        
+        return tf.compat.v1.nn.xw_plus_b(x, W, b)
 
 
-def lrn(x, radius, alpha, beta, name, bias=1.0):
-    """Create a local response normalization layer."""
-    return tf.nn.local_response_normalization(x,
-        depth_radius=radius,
-        alpha=alpha,
-        beta=beta,
-        bias=bias,
-        name=name)
+# batch norm layer
+def batch_norm(x, decay=0.999, epsilon=1e-03, scope="scope"):
+    x_shape = x.get_shape()
+    input_channels = x_shape[-1]
+    reduce_dims = list(range(len(x_shape) - 1))
+
+    with tf.compat.v1.variable_scope(scope):
+        beta = variable_weight("beta", [input_channels,], 
+                                initializer=tf.zeros_initializer())
+        gamma = variable_weight("gamma", [input_channels,], 
+                                initializer=tf.ones_initializer())
+        # for inference
+        moving_mean = variable_weight("moving_mean", [input_channels,],
+                                initializer=tf.zeros_initializer(), trainable=False)
+        moving_variance = variable_weight("moving_variance", [input_channels], 
+                                initializer=tf.ones_initializer(), trainable=False)
+
+    mean, variance = tf.nn.moments(x, axes=reduce_dims)
+    update_move_mean = moving_averages.assign_moving_average(moving_mean, mean, decay=decay)
+    update_move_variance = moving_averages.assign_moving_average(moving_variance, variance, decay=decay)
+    tf.compat.v1.add_to_collection(tf.compat.v1.GraphKeys.UPDATE_OPS, update_move_mean)
+    tf.compat.v1.add_to_collection(tf.compat.v1.GraphKeys.UPDATE_OPS, update_move_variance)
+
+    return tf.nn.batch_normalization(x, mean, variance, beta, gamma, epsilon)
 
 
-def dropout(x, rate):
-    """Create a dropout layer."""
-    return tf.nn.dropout(x, rate=rate)
+def pool_layer(x, pool_size, pool_stride, name, padding='SAME', pooling_Mode='max_pool'):
+    if pooling_Mode=='max_pool':
+        return tf.nn.max_pool(x, [1, pool_size, pool_size, 1], [1, pool_stride, pool_stride, 1], padding = padding, name = name)
+
+    if pooling_Mode=='avg_pool':
+        return tf.nn.avg_pool2d(x, [1, pool_size, pool_size, 1], [1, pool_stride, pool_stride, 1], padding = padding, name = name)
+
+

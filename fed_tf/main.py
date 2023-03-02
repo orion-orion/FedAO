@@ -7,10 +7,10 @@ import tensorflow as tf
 from scipy import sparse
 import logging
 from utils import load_dataset
-from model import ConvNet
+from fed_tf.model import resnet20
 from clients import Clients
 from fl import run_fl
-
+from tensorflow.compat.v1.train import AdamOptimizer
 
 def arg_parse():
     parser = argparse.ArgumentParser()
@@ -19,8 +19,8 @@ def arg_parse():
     parser.add_argument('--dataset', type=str, default='CIFAR10',
                         help='dataset, possible are `CIFAR10`, `CIFAR100`')
     parser.add_argument('--n_clients', type=int, default=10)
-    parser.add_argument('--train_frac', help='fraction of train samples', type=float, default=0.8)
-    parser.add_argument('--val_frac', help='fraction of validation samples in train samples', type=float, default=0.2)      
+    parser.add_argument('--train_frac', help='fraction of train samples', type=float, default=0.9)
+    parser.add_argument('--valid_frac', help='fraction of validation samples in train samples', type=float, default=0.1)      
     parser.add_argument('--pathological_split',help='if selected, the dataset will be split as in' \
         '"Communication-Efficient Learning of Deep Networks from Decentralized Data";'
              'i.e., each client will receive `n_shards` of dataset, where each shard contains at most two classes',
@@ -31,15 +31,15 @@ def arg_parse():
     parser.add_argument('--alpha', help = 'the parameter of dirichalet', type=float, default=1.0)
 
     # train part
-    parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-    parser.add_argument('--batch_size', type=int, default=4096, help='batch size') # 32
+    parser.add_argument('--lr', type=float, default=0.001, help='applies to Adam.')
+    parser.add_argument('--batch_size', type=int, default=128, help='training batch size') 
     parser.add_argument('--cuda', type=bool, default=tf.test.is_gpu_available())
     parser.add_argument('--gpu', type=str, default='0', help='use of gpu')
     parser.add_argument('--log_dir', type=str, default='log', help='directory of logs')
-    parser.add_argument('--frac', type=float, default=1, help='Fraction of participating clients')
+    parser.add_argument('--frac', type=float, default=1, help='fraction of participating clients')
     parser.add_argument('--epochs', type=int, default=200, help='the number of epochs')
-    parser.add_argument('--local_epoch', type=int, default=3, help='Number of local training epochs.')
-    parser.add_argument('--eval_interval', type=int, default=1, help='Interval of evalution')
+    parser.add_argument('--local_epoch', type=int, default=1, help='number of local training epochs')
+    parser.add_argument('--eval_interval', type=int, default=1, help='interval of evalution')
     parser.add_argument('--seed', type=int, default=42, help='random seed')
 
     args = parser.parse_args()
@@ -48,7 +48,7 @@ def arg_parse():
 
 def seed_everything(args):
     random.seed(args.seed)
-    tf.random.set_random_seed(args.seed)
+    tf.compat.v1.random.set_random_seed(args.seed)
     np.random.seed(args.seed)
     os.environ['PYTHONHASHSEED'] = str(args.seed)
     
@@ -80,9 +80,11 @@ def main():
       
     client_train_datasets, client_valid_datasets, client_test_datasets, data_info = load_dataset(args)
 
-    clients = Clients(lambda graph: ConvNet(graph, input_size=data_info["num_features"], num_classes=data_info["num_classes"], \
-            num_channels=data_info["num_channels"], learning_rate=args.lr, args=args), client_train_datasets, client_valid_datasets, client_test_datasets, data_info)
-    
+    clients = Clients(lambda graph: \
+                            resnet20(graph, args, lambda: AdamOptimizer(learning_rate=args.lr), \
+                                    input_size=data_info["num_features"], num_classes=data_info["num_classes"], in_channels=data_info["num_channels"]), \
+                    args, client_train_datasets, client_valid_datasets, client_test_datasets, data_info)
+
     run_fl(clients, args)    
  
 
