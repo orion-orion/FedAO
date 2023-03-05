@@ -20,7 +20,7 @@
 
 <div align="center">
 
-# FedAO: 联邦学习FedAvg算法的实现工具箱
+# FedAO: 联邦学习FedAvg算法的一站式工具箱
 
 [![Open Source Love](https://badges.frapsoft.com/os/v2/open-source.svg?v=103)](https://github.com/orion-orion/CNN-LSTM-Flow-Analysis)[![](https://img.shields.io/github/license/orion-orion/FedAO)](https://github.com/orion-orion/FedAO/blob/master/LICENSE)[![](https://img.shields.io/github/stars/orion-orion/FedAO?style=social)](https://github.com/orion-orion/FedAO)
 <br/>
@@ -28,7 +28,7 @@
 </div>
 
 ## 1 简介
-[FedAO](https://github.com/orion-orion/FedAO)（FedAvg All in One）为联邦学习的工具箱，旨在提供联邦学习中FedAvg算法（参见论文[《Communication-efficient learning of deep networks from decentralized data》](http://proceedings.mlr.press/v54/mcmahan17a?ref=https://githubhelp.com)的Pytorch/Tensorflow、同步/异步、单机/分布式的多版本实现。
+[FedAO](https://github.com/orion-orion/FedAO)（FedAvg All in One）为联邦学习（federated learning）的工具箱，旨在提供联邦学习中FedAvg算法（参见论文[《Communication-efficient learning of deep networks from decentralized data》](http://proceedings.mlr.press/v54/mcmahan17a?ref=https://githubhelp.com)的Pytorch/Tensorflow、单机/分布式（distributed）、同步/异步（asynchronous）的多版本实现。
 
 如果你还不熟悉分布式机器学习/联邦学习，可以先阅读我的博客[《分布式机器学习、联邦学习、多智能体的区别和联系》](https://www.cnblogs.com/orion-orion/p/15676710.html)学习预备知识。联邦学习的优化目标为：
 
@@ -39,13 +39,13 @@ $$
 \end{aligned}
 $$
 
-其中 $K$ 为客户端的个数， $n_k$ 为第 $k$ 个节点的样本个数。FedAvg算法的伪代码如下图所示：
+其中 $K$ 为客户端的数量， $n_k$ 为第 $k$ 个节点的样本数量。FedAvg算法的伪代码如下图所示：
 
 <p align="center">
 <img src="pic/FedAvg-pseudocode.png" width="430" height="400">
 </p>
 
-这里 $K$ 为客户端的个数， $B$ 为本地迭代的batch size大小， $E$ 为本地迭代次数（local epochs）， $\eta$ 为学习率。
+这里 $K$ 为客户端的数量， $B$ 为本地迭代的batch size大小， $E$ 为本地迭代次数（local epochs）， $\eta$ 为学习率。
 
 注意，我们将数据按照Dirichlet分布或者病态非独立同分布（即FedAvg原始论文中所采用的方法）划分好数据集后，再根据用户给定比例在本地划分训练/验证/测试集。除了模型参数的聚合按照本地训练集样本数量进行加权之外，模型在本地验证/测试后的结果也会按照本地验证/测试集样本数量进行加权，得到模型全局的验证/测试结果。
 
