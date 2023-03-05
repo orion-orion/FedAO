@@ -1,16 +1,9 @@
-import html
-import re
-import nltk
 import os
-import pickle
 import random
 import numpy as np
-# from torchvision import datasets, transforms
-from nltk import word_tokenize, pos_tag
 import tensorflow as tf
 import sys
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 
 
 sys.path.append(os.path.dirname(__file__) + os.sep + '../')

@@ -1,7 +1,6 @@
 import torch
 import threading
 import torch.distributed.rpc as rpc
-from torch import optim
 
     
 class Server(object):

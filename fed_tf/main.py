@@ -4,7 +4,6 @@ import os
 import argparse
 import numpy as np
 import tensorflow as tf
-from scipy import sparse
 import logging
 from utils import load_dataset
 from fed_tf.model import resnet20

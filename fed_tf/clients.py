@@ -1,6 +1,5 @@
 import tensorflow as tf
 import numpy as np
-from collections import namedtuple
 import math
 import gc
 import logging
