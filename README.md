@@ -22,13 +22,13 @@
 
 # FedAO: 联邦学习FedAvg算法的实现工具箱
 
-[![Open Source Love](https://badges.frapsoft.com/os/v2/open-source.svg?v=103)](https://github.com/orion-orion/CNN-LSTM-Flow-Analysis)[![](https://img.shields.io/github/license/orion-orion/CNN-LSTM-Flow-Analysis)](https://github.com/orion-orion/CNN-LSTM-Flow-Analysis/blob/master/LICENSE)[![](https://img.shields.io/github/stars/orion-orion/CNN-LSTM-Flow-Analysis?style=social)](https://github.com/orion-orion/CNN-LSTM-Flow-Analysis)
+[![Open Source Love](https://badges.frapsoft.com/os/v2/open-source.svg?v=103)](https://github.com/orion-orion/CNN-LSTM-Flow-Analysis)[![](https://img.shields.io/github/license/orion-orion/FedAO)](https://github.com/orion-orion/FedAO/blob/master/LICENSE)[![](https://img.shields.io/github/stars/orion-orion/FedAO?style=social)](https://github.com/orion-orion/FedAO)
 <br/>
-[![](https://img.shields.io/github/directory-file-count/orion-orion/CNN-LSTM-Flow-Analysis)](https://github.com/orion-orion/CNN-LSTM-Flow-Analysis) [![](https://img.shields.io/github/languages/code-size/orion-orion/CNN-LSTM-Flow-Analysis)](https://github.com/orion-orion/CNN-LSTM-Flow-Analysis) 
+[![](https://img.shields.io/github/directory-file-count/orion-orion/FedAO)](https://github.com/orion-orion/FedAO) [![](https://img.shields.io/github/languages/code-size/orion-orion/FedAO)](https://github.com/orion-orion/FedAO) 
 </div>
 
 ## 1 简介
-本项目为联邦学习的工具箱，旨在提供联邦学习中FedAvg算法（参见论文[《Communication-efficient learning of deep networks from decentralized data》](http://proceedings.mlr.press/v54/mcmahan17a?ref=https://githubhelp.com)的Pytorch/Tensorflow、同步/异步、单机/分布式的多版本实现。
+[FedAO](https://github.com/orion-orion/FedAO)（FedAvg All in One）为联邦学习的工具箱，旨在提供联邦学习中FedAvg算法（参见论文[《Communication-efficient learning of deep networks from decentralized data》](http://proceedings.mlr.press/v54/mcmahan17a?ref=https://githubhelp.com)的Pytorch/Tensorflow、同步/异步、单机/分布式的多版本实现。
 
 如果你还不熟悉分布式机器学习/联邦学习，可以先阅读我的博客[《分布式机器学习、联邦学习、多智能体的区别和联系》](https://www.cnblogs.com/orion-orion/p/15676710.html)学习预备知识。联邦学习的优化目标为：
 
