@@ -48,7 +48,7 @@ class Clients:
         """
         dataset = self.train_datasets[c_id]
         with self.graph.as_default():
-            for _ in range(args.local_epoch):
+            for _ in range(args.local_epochs):
                 loss, n_samples = 0.0, 0
                 for x, y in batch_iter(dataset, args.batch_size):
                     y = to_categorical(y, self.num_classes)
@@ -61,7 +61,7 @@ class Clients:
                     n_samples += y.shape[0]
 
             gc.collect()
-        logging.info('Global epoch {}/{} - client {} -  Training Loss: {:.3f}'.format(epoch, args.epochs, c_id, loss / n_samples))
+        logging.info('Global epoch {}/{} - client {} -  Training Loss: {:.3f}'.format(epoch, args.global_epochs, c_id, loss / n_samples))
         return n_samples 
     
     def evaluation(self, c_id, args, mod = "valid"):

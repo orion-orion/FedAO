@@ -18,7 +18,7 @@ def evaluation_logging(eval_logs, epoch, mod="valid"):
 
 def run_fl(clients, args):
     global_weights = clients.get_client_weights()
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(1, args.global_epochs + 1):
         
         # We are going to sum up active clients' weights at each epoch
         client_weights_sum = None

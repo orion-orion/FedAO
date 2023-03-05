@@ -37,8 +37,8 @@ def arg_parse():
     parser.add_argument('--gpu', type=str, default='0', help='use of gpu')
     parser.add_argument('--log_dir', type=str, default='log', help='directory of logs')
     parser.add_argument('--frac', type=float, default=1, help='fraction of participating clients')
-    parser.add_argument('--epochs', type=int, default=200, help='the number of epochs')
-    parser.add_argument('--local_epoch', type=int, default=1, help='number of local training epochs')
+    parser.add_argument('--global_epochs', type=int, default=200, help='the number of epochs')
+    parser.add_argument('--local_epochs', type=int, default=1, help='number of local training epochs')
     parser.add_argument('--eval_interval', type=int, default=1, help='interval of evalution')
     parser.add_argument('--seed', type=int, default=42, help='random seed')
 
