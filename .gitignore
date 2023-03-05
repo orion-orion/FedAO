@@ -40,8 +40,10 @@ events.*
 # data
 fed_pytorch/data
 !fed_pytorch/.gitkeep
-fed_multiprocess/data
-!fed_multiprocess/.gitkeep
+fed_multiprocess_syn/data
+!fed_multiprocess_syn/.gitkeep
+fed_RPC_asyn/data
+!fed_RPC_asyn/.gitkeep
 *.pkl
 *.txt
 *.json
