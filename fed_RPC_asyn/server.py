@@ -22,8 +22,8 @@ class Server(object):
 
     @staticmethod
     @rpc.functions.async_execution
-    def update_and_fetch_model(ps_rref, client_weights):
-        self = ps_rref.local_value()
+    def update_and_fetch_model(server_rref, client_weights):
+        self = server_rref.local_value()
         for name, g_w in self.global_weights.items():
             # 这里采用最简单的方式更新全局模型: w^{t+1} = (1 - lam) * w^t + lam * w^{new} 
             # 大家可以根据自己的需要修改

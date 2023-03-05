@@ -10,11 +10,11 @@ from utils import logging
     
 class Client(object):
 
-    def __init__(self, ps_rref, model_fn, optimizer_fn, args, train_dataset, test_dataset, valid_dataset):
+    def __init__(self, server_rref, model_fn, optimizer_fn, args, train_dataset, test_dataset, valid_dataset):
         self.device = "cuda" if args.cuda else "cpu"
         self.model = model_fn() # 初始化由于要参与RPC通信，暂时先不分配在GPU，后面训练的时候再分配
         self.optimizer = optimizer_fn(self.model.parameters())
-        self.ps_rref = ps_rref
+        self.server_rref = server_rref
             
         self.train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
         self.valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False)
@@ -41,9 +41,9 @@ class Client(object):
         self.model.train()
         for epoch in range(1, args.global_epochs + 1):
             global_weights = rpc.rpc_sync(
-                self.ps_rref.owner(),
+                self.server_rref.owner(),
                 Server.update_and_fetch_model,
-                args=(self.ps_rref, self.get_client_weights()), # 注意：RPC只支持CPU通信
+                args=(self.server_rref, self.get_client_weights()), # 注意：RPC只支持CPU通信
             )
             self.set_global_weights(global_weights)
             self.model.to(self.device) # 此时将模型分配在GPU
