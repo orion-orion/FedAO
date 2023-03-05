@@ -35,15 +35,14 @@ MANIFEST
 
 # code generated files
 events.*
-*.png
 
 # data
-fed_pytorch/data
-!fed_pytorch/.gitkeep
-fed_multiprocess_syn/data
-!fed_multiprocess_syn/.gitkeep
-fed_RPC_asyn/data
-!fed_RPC_asyn/.gitkeep
+fed_pytorch/data/*
+!fed_pytorch/data/.gitkeep
+fed_multiprocess_syn/data/*
+!fed_multiprocess_syn/data/.gitkeep
+fed_RPC_asyn/data/*
+!fed_RPC_asyn/data/.gitkeep
 *.pkl
 *.txt
 *.json
