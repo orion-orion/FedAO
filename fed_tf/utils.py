@@ -1,27 +1,30 @@
-import os
+# -*- coding: utf-8 -*-
 import random
-import numpy as np
-import tensorflow as tf
+import os
 import sys
+import numpy as np
 from sklearn.model_selection import train_test_split
-
-
-sys.path.append(os.path.dirname(__file__) + os.sep + '../')
-from data_utils.data_split import split_noniid, pathological_non_iid_split
-from data_utils.plot import display_data_distribution
+import tensorflow as tf
 
 
 def load_dataset(args):
+    sys.path.append(os.path.dirname(__file__) + os.sep + "../")
+    from data_utils.data_split import split_noniid, \
+        pathological_non_iid_split
+    from data_utils.plot import display_data_distribution
+
     if args.dataset == "CIFAR10":
-        (x_train, y_train), (x_test, y_test) = tf.keras.datasets.cifar10.load_data()
+        (x_train, y_train), (x_test, y_test) = tf.keras.datasets.cifar10\
+            .load_data()
     elif args.dataset == "CIFAR100":
-        (x_train, y_train), (x_test, y_test) = tf.keras.datasets.cifar100.load_data()
+        (x_train, y_train), (x_test, y_test) = tf.keras.datasets.cifar100\
+            .load_data()
     else:
-        raise ValueError("Please input the correct dataset name, it must be one of:"
-                        "CIFAR10, CIFAR100!")
-    
+        raise ValueError("Please input the correct dataset name, it must be"
+                         "one of: CIFAR10, CIFAR100!")
+
     X = np.concatenate([x_train, x_test], axis=0)
-    X = X.astype(np.float32)/ 255.0 # [0 - 1] range
+    X = X.astype(np.float32) / 255.0  # [0 - 1] range
     y = np.concatenate([y_train, y_test], axis=0).reshape(-1)
 
     data_info = {}
@@ -31,12 +34,14 @@ def load_dataset(args):
     data_info["num_channels"] = X[0].shape[-1]
 
     if args.pathological_split:
-        client_idcs = pathological_non_iid_split(y, args.n_shards, args.n_clients)
+        client_idcs = pathological_non_iid_split(
+            y, args.n_shards, args.n_clients)
     else:
         client_idcs = split_noniid(y, args.alpha, args.n_clients)
 
     client_train_idcs, client_test_idcs, client_valid_idcs = [], [], []
-    # 在本地划分成train，val, test集合前要先shuffle
+    # Before dividing the local training, validation, and test datasets,
+    # shuffle must be performed first
     for idcs in client_idcs:
         train_idcs, test_idcs =\
             train_test_split(
@@ -57,19 +62,24 @@ def load_dataset(args):
         client_train_idcs.append(train_idcs)
         client_test_idcs.append(test_idcs)
 
-    display_data_distribution(client_idcs, y, data_info['num_classes'], args.n_clients, args)
+    display_data_distribution(
+        client_idcs, y, data_info["num_classes"], args.n_clients, args)
 
-    client_train_datasets = [(X[train_idc], y[train_idc]) for train_idc in client_train_idcs]
-    client_valid_datasets = [(X[valid_idc], y[valid_idc]) for valid_idc in client_valid_idcs]
-    client_test_datasets = [(X[test_idc], y[test_idc]) for test_idc in client_test_idcs]
+    client_train_datasets = [(X[train_idc], y[train_idc])
+                             for train_idc in client_train_idcs]
+    client_valid_datasets = [(X[valid_idc], y[valid_idc])
+                             for valid_idc in client_valid_idcs]
+    client_test_datasets = [(X[test_idc], y[test_idc])
+                            for test_idc in client_test_idcs]
 
-    return client_train_datasets, client_valid_datasets, client_test_datasets, data_info
+    return client_train_datasets, client_valid_datasets, \
+        client_test_datasets, data_info
 
 
-def batch_iter(dataset, batch_size, mod="train"):
+def batch_iter(dataset, batch_size, mode="train"):
     X, Y = dataset
-    x_y_pair = list(zip(X, Y)) 
-    if mod == "train":
+    x_y_pair = list(zip(X, Y))
+    if mode == "train":
         random.shuffle(x_y_pair)
     X = np.stack(list(zip(*x_y_pair))[0])
     Y = np.stack(list(zip(*x_y_pair))[1])
