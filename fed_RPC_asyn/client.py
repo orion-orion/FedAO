@@ -1,41 +1,51 @@
+# -*- coding: utf-8 -*-
 import gc
 import torch
 from torch.utils.data import DataLoader
 import os
-# import logging
 from server import Server
 import torch.distributed.rpc as rpc
 from utils import logging
 
-    
+
 class Client(object):
 
-    def __init__(self, server_rref, model_fn, optimizer_fn, args, train_dataset, test_dataset, valid_dataset):
+    def __init__(self, server_rref, model_fn, optimizer_fn, args,
+                 train_dataset, test_dataset, valid_dataset):
         self.device = "cuda" if args.cuda else "cpu"
-        self.model = model_fn() # 初始化由于要参与RPC通信，暂时先不分配在GPU，后面训练的时候再分配
+        # Since the model parameters need to participate in RPC communication,
+        # the model is not allocated on the GPU when it is initialized, and
+        # then moved to the GPU when it is trained later
+        self.model = model_fn()
         self.optimizer = optimizer_fn(self.model.parameters())
         self.server_rref = server_rref
-            
-        self.train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-        self.valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False)
-        self.test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)    
-        
-        # 初始化各client的样本占所有样本的比率
+
+        self.train_dataloader = DataLoader(
+            train_dataset, batch_size=args.batch_size, shuffle=True)
+        self.valid_dataloader = DataLoader(
+            valid_dataset, batch_size=args.batch_size, shuffle=False)
+        self.test_dataloader = DataLoader(
+            test_dataset, batch_size=args.batch_size, shuffle=False)
+
+        # Initialize the proportion of the samples of each client to all
+        # samples
         self.train_pop, self.valid_prop, self.test_prop = 0.0, 0.0, 0.0
-        
-        # 初始化各client的权重
+
+        # Compute the number of samples for each client
         self.n_samples_train = len(train_dataset)
         if args.valid_frac > 0:
             self.n_samples_valid = len(valid_dataset)
         self.n_samples_test = len(test_dataset)
-            
+
     def train(self, c_id, args):
+        """Train one client with its own data for one epoch.
+
+        Args:
+            c_id: client ID.
+            args: other parameters for training.
         """
-            Train one client with its own data for one epoch
-            cid: Client id
-            args: Arguments of training
-        """
-        self.log_file = open(os.path.join(args.log_dir, args.dataset + '.log'), "a+")
+        self.log_file = open(os.path.join(
+            args.log_dir, args.dataset + ".log"), "a+")
 
         torch.manual_seed(args.seed + c_id)
         self.model.train()
@@ -43,36 +53,67 @@ class Client(object):
             global_weights = rpc.rpc_sync(
                 self.server_rref.owner(),
                 Server.update_and_fetch_model,
-                args=(self.server_rref, self.get_client_weights()), # 注意：RPC只支持CPU通信
+                # Note that RPC only supports CPU
+                args=(self.server_rref, self.get_client_weights()),
             )
             self.set_global_weights(global_weights)
-            self.model.to(self.device) # 此时将模型分配在GPU
-                 
+            self.model.to(self.device)  # move the model to the GPU
+
             for _ in range(args.local_epochs):
                 loss, n_samples = 0.0, 0
                 for x, y in self.train_dataloader:
                     x, y = x.to(self.device), y.to(self.device)
                     self.optimizer.zero_grad()
 
-                    # Pytorch自带softmax和默认取了mean
+                    # The `CrossEntropyLoss` function in Pytorch will divide
+                    # by the mini-batch size by default
                     l = torch.nn.CrossEntropyLoss()(self.model(x), y)
+                    if args.fed_method == "FedProx":
+                        l += self.prox_reg(dict(self.model.named_parameters()),
+                                           global_weights, args.mu)
+
                     l.backward()
                     self.optimizer.step()
 
                     loss += l.item() * y.shape[0]
                     n_samples += y.shape[0]
-                
+
                 gc.collect()
-            logging('Global epoch {}/{} - client {} -  Training Loss: {:.3f}'.format(epoch, args.global_epochs, c_id, loss/n_samples), \
-                self.log_file)   
-                
+            logging("Global epoch {}/{} - client {} -  Training Loss: {:.3f}"
+                    .format(epoch, args.global_epochs, c_id, loss/n_samples),
+                    self.log_file)
+
             if args.valid_frac > 0 and epoch % args.eval_interval == 0:
-                self.evaluation(c_id, args, epoch, mod="valid")
-    
-    def evaluation(self, c_id, args, epoch=0, mod="valid"):   
-        if mod == "valid":
+                self.evaluation(c_id, args, epoch, mode="valid")
+
+    @ staticmethod
+    def flatten(params):
+        return torch.cat([param.flatten() for param in params])
+
+    def prox_reg(self, params1, params2, mu):
+        # The parameters returned by `named_parameters()` should be rearranged
+        # according to the keys of the parameters returned by `state_dict()`.
+        # Note that params2 should be moved to the device used first
+        params2_values = [params2[key].to(self.device)
+                          for key in params1.keys()]
+
+        # Multi-dimensional parameters should be flattened into one-dimensional
+        vec1 = self.flatten(params1.values())
+        vec2 = self.flatten(params2_values)
+        return mu / 2 * torch.norm(vec1 - vec2)**2
+
+    def evaluation(self, c_id, args, epoch=0, mode="valid"):
+        """Evaluation one client with its own data for one epoch.
+
+        Args:
+            c_id: client ID.
+            args: evaluation arguments.
+            epoch: current global epoch.
+            mode: choose valid or test mode.
+        """
+        if mode == "valid":
             dataloader = self.valid_dataloader
-        elif mod == "test":
+        elif mode == "test":
             dataloader = self.test_dataloader
 
         self.model.eval()
@@ -80,7 +121,7 @@ class Client(object):
         with torch.no_grad():
             for x, y in dataloader:
                 x, y = x.to(self.device), y.to(self.device)
-                
+
                 y_hat = self.model(x)
                 pred = torch.argmax(y_hat.data, 1)
 
@@ -90,26 +131,28 @@ class Client(object):
         gc.collect()
         self.acc = correct/n_samples
 
-        if mod == "valid":
-            logging('Global epoch {}/{} - client {} -  Valid ACC: {:.4f}'.format(epoch, args.global_epochs, c_id, self.acc), self.log_file)   
+        if mode == "valid":
+            logging("Global epoch {}/{} - client {} -  Valid ACC: {:.4f}".format(epoch,
+                    args.global_epochs, c_id, self.acc), self.log_file)
         else:
-            logging('Final - client {} -  Test ACC: {:.4f}'.format(c_id, self.acc), self.log_file) 
-        
-        if mod == "valid":
+            logging("Final - client {} -  Test ACC: {:.4f}".format(c_id,
+                    self.acc), self.log_file)
+
+        if mode == "valid":
             return self.acc * self.valid_prop
-        elif mod == "test":
+        elif mode == "test":
             return self.acc * self.test_prop
 
     def get_client_weights(self):
-        """ Return all of the weights list """
+        """Returns all of the weights in `OrderedDict` format. Note that
+        the `state_dict()` function returns the reference of the model
+        parameters. In consideration of computational efficiency, here we
+        choose to keep the reference.In addition, it should be noted that
+        RPC only supports CPU, so we need to move the model to CPU first.
+        """
         return self.model.cpu().state_dict()
-    
+
     def set_global_weights(self, global_weights):
-        """ Assign all of the weights with global weights """
+        """Assigns all of the weights with global weights.
+        """
         self.model.load_state_dict(global_weights)
-
-
-
-
-
-
