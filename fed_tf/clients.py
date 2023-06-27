@@ -1,49 +1,58 @@
-import tensorflow as tf
-import numpy as np
+# -*- coding: utf-8 -*-
 import math
 import gc
 import logging
 import numpy as np
+import tensorflow as tf
 from tensorflow.keras.utils import to_categorical
 from utils import batch_iter
 
 
 class Clients:
-    def __init__(self, model_fn, args, train_datasets, valid_datasets, test_datasets, data_info):
+    def __init__(self, model_fn, args, train_datasets, valid_datasets,
+                 test_datasets, data_info):
         self.graph = tf.Graph()
         self.sess = tf.compat.v1.Session(graph=self.graph)
         # Call the create function to build the computational graph of ResNet
         self.model = model_fn(self.graph)
         self.n_clients = args.n_clients
-        
-        # initialize
+
+        # Initialize the model parameters
         with self.graph.as_default():
             self.sess.run(tf.compat.v1.global_variables_initializer())
 
         self.num_classes = data_info["num_classes"]
-        
+
         self.train_datasets = train_datasets
         self.valid_datasets = valid_datasets
         self.test_datasets = test_datasets
 
-        # 初始化各client的样本占所有样本的比率
-        client_n_samples_train = [len(train_dataset[0]) for train_dataset in self.train_datasets]
+        # Compute the proportion of the samples of each client to all samples
+        client_n_samples_train = [len(train_dataset[0])
+                                  for train_dataset in self.train_datasets]
         samples_sum_train = sum(client_n_samples_train)
-        self.client_train_prop = [len(train_dataset[0])/samples_sum_train for train_dataset in self.train_datasets]
+        self.client_train_prop = [len(train_dataset[0])/samples_sum_train
+                                  for train_dataset in self.train_datasets]
         if args.valid_frac > 0:
-            client_n_samples_valid = [len(valid_dataset[0]) for valid_dataset in self.valid_datasets]
+            client_n_samples_valid = [len(valid_dataset[0])
+                                      for valid_dataset in self.valid_datasets]
             samples_sum_valid = sum(client_n_samples_valid)
-            self.client_valid_prop = [len(valid_dataset[0])/samples_sum_valid for valid_dataset in self.valid_datasets]
-        client_n_samples_test = [len(test_dataset[0])for test_dataset in self.test_datasets]
+            self.client_valid_prop = [len(valid_dataset[0])/samples_sum_valid
+                                      for valid_dataset in self.valid_datasets]
+        client_n_samples_test = [len(test_dataset[0])
+                                 for test_dataset in self.test_datasets]
         samples_sum_test = sum(client_n_samples_test)
-        self.client_test_prop = [len(test_dataset[0])/samples_sum_test for test_dataset in self.test_datasets]
+        self.client_test_prop = [len(test_dataset[0])/samples_sum_test
+                                 for test_dataset in self.test_datasets]
 
-    def train_epoch(self, c_id, epoch, args):
-        """
-            Train one client with its own data for one epoch
-            c_id: Client id
-            epoch: Current global epoch
-            args: Training arguments
+    def train_epoch(self, c_id, epoch, args, global_weights):
+        """Train one client with its own data for one epoch.
+
+        Args:
+            c_id: client ID.
+            epoch: current global epoch.
+            args: other parameters for training.
+            global_weights: global model weights used in `FedProx` method.
         """
         dataset = self.train_datasets[c_id]
         with self.graph.as_default():
@@ -52,68 +61,80 @@ class Clients:
                 for x, y in batch_iter(dataset, args.batch_size):
                     y = to_categorical(y, self.num_classes)
                     feed_dict = {self.model.x: x, self.model.y: y}
-                             
-                    l, _ = self.sess.run([self.model.loss_op, self.model.train_op],\
-                            feed_dict=feed_dict)
+                    if args.fed_method == "FedProx":
+                        # Multi-dimensional parameters should be flattened
+                        # into one-dimensional before computing the proximal
+                        # regularizer
+                        feed_dict.update({self.model.global_w_vec: self.model
+                                          .flatten(global_weights),
+                                          self.model.mu: args.mu})
+
+                    l, _ = self.sess.run([self.model.loss_op, self.model
+                                          .train_op], feed_dict=feed_dict)
 
                     loss += l * y.shape[0]
                     n_samples += y.shape[0]
 
             gc.collect()
-        logging.info('Global epoch {}/{} - client {} -  Training Loss: {:.3f}'.format(epoch, args.global_epochs, c_id, loss / n_samples))
-        return n_samples 
-    
-    def evaluation(self, c_id, args, mod = "valid"):
+        logging.info("Global epoch {}/{} - client {} -  Training Loss: {:.3f}"
+                     .format(epoch, args.global_epochs, c_id, loss
+                             / n_samples))
+        return n_samples
+
+    def evaluation(self, c_id, args, mode="valid"):
+        """Evaluation one client with its own data for one epoch.
+
+        Args:
+            c_id: client ID.
+            args: evaluation arguments.
+            mode: choose valid or test mode.
         """
-            Evaluation one client with its own data for one epoch
-            c_id: Client id
-            args: Evaluation arguments
-            mod: Choose valid or test mode
-        """
-        if mod == "valid":
+        if mode == "valid":
             dataset = self.valid_datasets[c_id]
-        elif mod == "test":
+        elif mode == "test":
             dataset = self.test_datasets[c_id]
 
         n_samples, correct = 0, 0
-        with self.graph.as_default():     
+        with self.graph.as_default():
             for x, y in batch_iter(dataset, args.batch_size):
                 y = to_categorical(y, self.num_classes)
                 feed_dict = {self.model.x: x, self.model.y: y}
 
-                logits = self.sess.run(self.model.logits,\
-                        feed_dict=feed_dict)
+                logits = self.sess.run(self.model.logits,
+                                       feed_dict=feed_dict)
                 pred = np.argmax(logits, axis=1)
 
                 correct += (pred == np.argmax(y, axis=1)).sum()
                 n_samples += y.shape[0]
-             
+
             gc.collect()
         self.acc = correct/n_samples
         return {"ACC": self.acc}
 
     def get_old_eval_log(self):
-        """ 
-            Return the evaluation result of the lastest epoch
+        """Returns the evaluation result of the lastest epoch.
         """
         return {"ACC": self.acc}
 
     def get_client_weights(self):
-        """ Return all of the variables list """
+        """Returns all of the weights in `list`.
+        """
         with self.graph.as_default():
             client_weights = self.sess.run(tf.compat.v1.trainable_variables())
         return client_weights
 
     def set_global_weights(self, global_weights):
-        """ Assign all of the variables with global weights """
+        """Assigns all of the variables with global weights. Note that
+        different from the Pytorch version, `sess.run()` in tensorflow will
+        get a copy of the evaluated model parameters on the CPU.
+        """
         with self.graph.as_default():
-            # with self.graph.as_default():
             all_weights = tf.compat.v1.trainable_variables()
             for variable, value in zip(all_weights, global_weights):
                 variable.load(value, self.sess)
 
     def choose_clients(self, ratio=1.0):
-        """ randomly choose some clients """
+        """Randomly chooses some clients.
+        """
         choose_num = math.ceil(self.n_clients * ratio)
         return np.random.permutation(self.n_clients)[:choose_num]
-
