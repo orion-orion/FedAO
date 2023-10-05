@@ -24,12 +24,14 @@ def display_data_distribution(client_idcs, train_labels, num_classes,
     plt.legend()
     if args.pathological_split:
         dataset_split_method = "Pathological"
-        param_descr = ", n_shards=%d" % args.n_shards
+        param_descr = "n_shards=%d" % args.n_shards
     else:
         dataset_split_method = "Dirichlet"
         param_descr = "alpha={}".format(args.alpha)
     plt.title("Federated " + args.dataset + " Display ({}, {})"
               .format(dataset_split_method, param_descr))
     plot_file = os.path.join(args.log_dir, "fed-" +
-                             args.dataset + "-display.png")
+                             args.dataset + "-display-{}-{}.png"
+                             .format(dataset_split_method,
+                                     param_descr))
     plt.savefig(plot_file)
