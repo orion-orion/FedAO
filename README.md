@@ -1,59 +1,47 @@
-<!--
- * @Descripttion: 
- * @Version: 1.0
- * @Author: ZhangHongYu
- * @Date: 2022-07-04 17:31:00
- * @LastEditors: ZhangHongYu
- * @LastEditTime: 2022-07-07 15:14:04
--->
-<!--
- * @Descripttion: 
- * @Version: 1.0
- * @Author: ZhangHongYu
- * @Date: 2022-07-03 20:27:59
- * @LastEditors: ZhangHongYu
- * @LastEditTime: 2022-07-04 17:04:43
--->
 <p align="center">
-<img src="pic/logo.png" width="500" height="200">
+<img src="pic/logo.png" width="500" height="190">
 </p>
 
 <div align="center">
 
-# FedAO: 联邦学习算法的一站式工具箱
+# FedAO: A Toolbox for Federated Learning All in One
 
-[![Open Source Love](https://badges.frapsoft.com/os/v2/open-source.svg?v=103)](https://github.com/orion-orion/CNN-LSTM-Flow-Analysis)[![](https://img.shields.io/github/license/orion-orion/FedAO)](https://github.com/orion-orion/FedAO/blob/master/LICENSE)[![](https://img.shields.io/github/stars/orion-orion/FedAO?style=social)](https://github.com/orion-orion/FedAO)
+[![Open Source Love](https://badges.frapsoft.com/os/v2/open-source.svg?v=103)](https://github.com/orion-orion/FedAO)[![](https://img.shields.io/github/license/orion-orion/FedAO)](https://github.com/orion-orion/FedAO/blob/master/LICENSE)[![](https://img.shields.io/github/stars/orion-orion/FedAO?style=social)](https://github.com/orion-orion/FedAO)
 <br/>
-[![](https://img.shields.io/github/directory-file-count/orion-orion/FedAO)](https://github.com/orion-orion/FedAO) [![](https://img.shields.io/github/languages/code-size/orion-orion/FedAO)](https://github.com/orion-orion/FedAO) 
+[![](https://img.shields.io/github/directory-file-count/orion-orion/FedAO)](https://github.com/orion-orion/FedAO) [![](https://img.shields.io/github/languages/code-size/orion-orion/FedAO)](https://github.com/orion-orion/FedAO)
 </div>
 
-## 1 简介
-[FedAO](https://github.com/orion-orion/FedAO)（Federated Learning All in One）为联邦学习（federated learning）的工具箱，旨在提供联邦学习中[FedAvg](http://proceedings.mlr.press/v54/mcmahan17a?ref=https://githubhelp.com)<sup>[1]</sup>、[FedProx](https://proceedings.mlsys.org/papers/2020/176)<sup>[2]</sup>等算法的Pytorch/Tensorflow、单机/分布式（distributed）、同步/异步（asynchronous）的多版本实现。
+## 1 Introduction
 
-如果您还不熟悉分布式机器学习/联邦学习，可以先阅读我的博客[《分布式机器学习、联邦学习、多智能体的区别和联系》](https://www.cnblogs.com/orion-orion/p/15676710.html)学习预备知识 (#\^.\^#)~ 。联邦学习的优化目标为：
+[FedAO](https://github.com/orion-orion/FedAO) (Federated Learning All in One) is a toolbox for federated learning, aiming to provide implementations of [FedAvg](https://proceedings.mlr.press/v32/shamir14.html)<sup>[1]</sup>, [FedProx](https://proceedings.mlsys.org/paper_files/paper/2020/hash/1f5fe83998a09396ebe6477d9475ba0c-Abstract.html)<sup>[2]</sup>, [Ditto](https://proceedings.mlr.press/v139/li21h.html)<sup>[3]</sup>, etc. in multiple versions, such as Pytorch/Tensorflow, single-machine/distributed, synchronized/asynchronous.
+
+If you are not familiar with distributed machine learning / federated learning, you can first read my blog [*分布式机器学习、联邦学习、多智能体的区别和联系*](https://www.cnblogs.com/orion-orion/p/15676710.html) to learn prerequisite knowledge (#\^.\^#)~. The objective function of federated learning is as follows:
 
 $$
 \begin{aligned}
-    f(w) &= \sum_{k=1}^K \frac{n_k}{n} F_k(w) \\
-    F_k(w) &= \frac{1}{n_k}\sum_{i = 1}^{n_k}\mathcal{l}(h(x_i; w), y_i)
+    f(w) &= \sum_{k=1}^K \frac{n_k}{n} F_k(w), \\
+    F_k(w) &= \frac{1}{n_k}\sum_{i = 1}^{n_k}\mathcal{l}(h(x_i; w), y_i),
 \end{aligned}
 $$
 
-其中 $K$ 为客户端的数量， $n_k$ 为第 $k$ 个节点的样本数量。联邦学习中最基础的FedAvg算法的伪代码如下图所示：
+where $K$ is the number of clients, $n_k$ is the number of samples of the $k$-th client. The pseudocode of the [FedAvg](https://proceedings.mlr.press/v32/shamir14.html)<sup>[1]</sup>, the most basic algorithm in federated learning, is shown as follows:
 
 <p align="center">
 <img src="pic/FedAvg-pseudocode.png" width="430" height="400">
 </p>
 
-这里 $K$ 为客户端的数量， $B$ 为本地迭代的batch size大小， $E$ 为本地迭代次数（local epochs）， $\eta$ 为学习率。
+where $K$ is the number of clients, $B$ is the local minibatch size, $E$ is the number of local epochs, and $\eta$ is the learning rate.
 
-注意，我们将数据按照Dirichlet分布或者病态非独立同分布（即FedAvg原始论文中所采用的方法）划分好数据集后，再根据用户给定比例在本地划分训练/验证/测试集。除了模型参数的聚合按照本地训练集样本数量进行加权之外，模型在本地验证/测试后的结果也会按照本地验证/测试集样本数量进行加权，得到模型全局的验证/测试结果。
+Note that after we split the dataset according to Dirichlet distribution (first used by [TMH Hsu et al.](https://arxiv.org/abs/1909.06335)<sup>[4]</sup>) or pathological non-IID splitting (first used in the [FedAvg](https://proceedings.mlr.press/v32/shamir14.html)<sup>[1]</sup> original paper), we then split the training/validation/test set locally according to the ratio given by the user. In addition to weighting the model parameters according to the number of local training set samples in the aggregation stage, the local validation/test results of the model are also weighted according to the number of local validation/test set samples in the validation/testing stage to obtain the global validation/test results of the model.
 
-有关联邦学习划分方法的详细介绍可以参看我的博客[《联邦学习：按Dirichlet分布划分Non-IID样本》](https://www.cnblogs.com/orion-orion/p/15897853.html)和[《联邦学习：按病态非独立同分布划分Non-IID样本 》](https://www.cnblogs.com/orion-orion/p/15631167.html)。
+For a detailed introduction to the dataset-splitting method in federated learning, please refer to my blog [*联邦学习：按Dirichlet分布划分Non-IID样本*](https://www.cnblogs.com/orion-orion/p/15897853.html) and [*联邦学习：按病态非独立同分布划分Non-IID样本*](https://www.cnblogs.com/orion-orion/p/15631167.html).
 
-## 2 环境依赖
-由于该项目涉及 Pytorch 和 Tensorflow 两个不同的框架，它们的环境需求各不相同，用户可自行安装对应的Anaconda环境。
- - **Pytorch** 涉及 Pytorch 代码的 Python 版本为 3.8.13 ，其余环境配置如下：
+## 2 Dependencies
+
+This project involves two different frameworks, Pytorch and Tensorflow. Their environmental requirements are different. You can install the corresponding Anaconda environment by yourself.
+
+- **Pytorch** The Python version involving Pytorch code is 3.8.13, and the remaining dependencies are as follows:
+  
     ```text
     numpy==1.22.3  
     tqdm
@@ -62,9 +50,7 @@ $$
     pytorch==1.7.1 
     ```
 
-
-
-- **Tensorflow** 涉及 Tensorflow 代码的Python版本为 3.8.15，且我的 CUDA 版本是 11。因为 Tensorflow 1.15 只支持Python 3.7 和CUDA 10，所以我使用了下列命令以在 CUDA 11 上安装 Tensorflow 1.15:
+- **Tensorflow** The Python version involved in the Tensorflow code is 3.8.15, and my CUDA version is 11. Because Tensorflow 1.15 only supports Python 3.7 and CUDA 10, I used the following command to install Tensorflow 1.15 on CUDA 11:
 
     ```bash
     pip install --upgrade pip
@@ -72,7 +58,9 @@ $$
     pip install nvidia-tensorflow[horovod]
     pip install nvidia-tensorboard==1.15
     ```
-    除了Tensorflow之外，其余环境配置如下：
+
+    In addition to Tensorflow, the remaining dependencies are as follows:
+
     ```text
     numpy==1.20.0   
     tqdm
@@ -80,121 +68,151 @@ $$
     scikit-learn==1.2.0     
     ```
 
-## 3 数据集
+## 3 Dataset
 
-本项目统一使用 Torchvision 和 Keras 中的内置数据集，在代码中会自动下载和加载，无需自行下载。 Pytorch 版本支持`EMNIST`、`FashionMNST`,`CIFAR10`, `CIFAR100`数据集，Tensorfow版本支持`CIFAR10`、`CIFAR100`数据集（Keras 的`EMNIST`和`FashionMNIST`数据集需要翻墙下载，大家挂梯子或自行下载后离线读取即可）。
+This project uses the built-in datasets in Torchvision and Keras, which will be automatically downloaded and loaded in the code, without manual downloading. Pytorch code supports `EMNIST`, `FashionMNIST`, `CIFAR10`, and `CIFAR100` datasets and Tensorflow code supports `CIFAR10`, `CIFAR100` datasets (If you are in mainland China, Keras's `EMNIST` and `FashionMNIST` datasets need to be downloaded over the GFW. You can use a "ladder" or download them manually and read them offline).
 
-Torchvision 数据集下载后存放在当前代码运行目录的`data`文件夹下，Keras数据集下载后存放在`~/.keras/datasets`目录下。
+The Torchvision dataset is stored in the `data` directory of the current code running path after downloaded, and the Keras dataset is stored in the `~/.keras/datasets` directory after downloaded.
 
-数据集可以选择按照Dirichet分布和病态非独立同分布（即联邦学习原始论文中所采用的方法）两种不同的方式进行划分。
+The dataset can be split in two different ways: Dirichlet distribution (first used by [TMH Hsu et al.](https://arxiv.org/abs/1909.06335)<sup>[4]</sup>) and pathological non-IID splitting (first used in the [FedAvg](https://proceedings.mlr.press/v32/shamir14.html)<sup>[1]</sup> original paper).
 
-CIFAR10数据集按照Dirichlet分布（ $\alpha=1.0$ ）划分可视化如下：
+The display of the CIFAR10 dataset splitted according to Dirichlet distribution ($\alpha=0.1$) is as follows:
 
-<img src="pic/fed-CIFAR10-dirichlet-display.png" width="800" height="250">
+<img src="pic/fed-CIFAR10-display-Dirichlet-alpha=0.1.png" width="800" height="250">
 
-CIFAR10数据集按照病态非独立同分布（pathological）（ 每个client包含 $2$ 个类）的划分可视化如下：
+The display of the CIFAR10 dataset split according to pathological non-IID splitting (each client contains $2$ classes) is as follows:
 
-<img src="pic/fed-CIFAR10-pathological-display.png" width="800" height="250">
+<img src="pic/fed-CIFAR10-display-Pathological-n_shards=2.png" width="800" height="250">
 
-## 4 项目目录说明
+## 4 Code Structure
 
 ```bash
 FedAO
-├── data_utils                             各版本通用的数据划分和可视化代码
-│   ├── __init__.py                        包初始化文件    
-│   ├── data_split.py                      数据集划分算法的实现 
-│   └── plot.py                            数据集划分可视化 
-├── fed_multiprocess_syn                   单机多进程同步算法版本（Pytorch实现）
-│   ├── client.py                          客户端模型训练和验证    
-│   ├── fl.py                              联邦学习总流程（含通信等） 
-│   ├── main.py                            主函数，包括了整个数据pipline
-│   ├── model.py                           模型架构
-│   ├── server.py                          服务器端参数聚合 
-│   ├── subset.py                          自定义Pytorch数据集 
-│   └── utils.py                           数据集加载等工具函数 
-├── fed_pytorch                            单机串行模拟版本（Pytorch实现）
+├── data_utils                             Data preprocessing utilities
+│   ├── __init__.py                        Package initialization file
+│   ├── data_split.py                      Code for splitting the dataset
+│   └── plot.py                            Code for displaying the dataset
+├── fed_multiprocess_syn                   Single-machine, multi-process and synchronized implementation (in Pytorch)
+│   ├── client.py                          Client-side local training and validation module 
+│   ├── fl.py                              The overall process of federated learning (including communication, etc.)
+│   ├── main.py                            Main function, including the overall data pipeline
+│   ├── model.py                           Model architecture
+│   ├── server.py                          Server-side model aggregation
+│   ├── subset.py                          Customized Pytorch dataset
+│   └── utils.py                           Utilities for dataset loading etc.
+├── fed_pytorch                            Single-machine, serial implementation (in Pytorch)
 │   ├── ...
-├── fed_RPC_asyn                           分布式异步算法版本（Pytorch实现）
+├── fed_RPC_asyn                           Distributed, asynchronous implementation (in Pytorch)
 │   ├── ...
-└──fed_tf                                  单机串行模拟版本（Tensorflow实现）
+└──fed_tf                                  Single-machine, serial implementation (in Tensorflow)
     ├── ...
 ```
-## 5 使用方法
-### 5.1 Pytorch单机串行版本
 
-您可以先进入到对应目录下，然后运行`main.py`来训练/验证/测试模型。例如:
+## 5 Train & Eval
+
+### 5.1 Single-machine, serial implementation (in Pytorch)
+
+You can first enter the corresponding path and then run `main.py` to train/validate/test the model. For example:
+
 ```bash
 cd fed_pytorch    
 python main.py \
         --dataset CIFAR10 \
         --n_clients 10 \
-        --global_epochs 200 \
+        --rounds 200 \
         --local_epochs 1 \
         --fed_method FedAvg    
 ```
-其中`--dataset`参数用于选择数据集，`--n_clients`参数用于指定客户端的个数，`--global_epochs`用于指定全局迭代轮数，`--local_epochs`用于指定本地迭代轮数，`--fed_method`参数用于指定所采用的联邦学习方法。
 
-训练完成后, 你可以在代码运行目录的`log`子目录下查看训练/验证/测试的日志情况。此外，数据集划分的可视化也存放在`log`目录下，大家可以前去查看。
+The `--dataset` parameter is used to specify the dataset, the `--n_clients` parameter is used to specify the number of clients, `--rounds` is used to specify the number of global training rounds, and `--local_epochs` is used to specify the number of local epochs, the `--fed_method` parameter is used to specify the federated learning method used.
 
-如果需要使用FedProx方法来进行训练，则可使用如下命令：
+After the training is completed, you can view the training/validation/testing logs in the `log` directory of the code running path. In addition, the display of the dataset splitting is also stored in the `log` directory, and you can check it out.
+
+If you need to use FedProx for training, you can use the following command:
+
 ```bash
 cd fed_pytorch    
 python main.py \
         --dataset CIFAR10 \
         --n_clients 10 \
-        --global_epochs 200 \
+        --rounds 200 \
         --local_epochs 1 \
         --fed_method FedProx \
         --mu 0.01
 ```
-这里多出了一个参数`--mu`，表示FedProx方法中的近端正则项的系数。其余参数的含义与Pytorch单机串行版本完全相同，此处不再赘述。
 
-### 5.2 Tensorflow单机串行版本
+There is an additional parameter `--mu`, which represents the coefficient of the proximal regularization term in FedProx. The meaning of the remaining parameters is the same as that of the Pytorch single-machine serial implementation, and will not be described here.
 
-同样，先进入到对应目录下，然后运行`main.py`来训练/验证/测试模型。例如:
+If you need to use Ditto for training, you can use the following command:
+
+```bash
+cd fed_pytorch    
+python main.py \
+        --dataset CIFAR10 \
+        --n_clients 10 \
+        --rounds 200 \
+        --local_epochs 1 \
+        --fed_method Ditto \
+        --lam 0.1
+```
+
+There is also an additional parameter `--lam`, which represents the coefficient of the proximal regularization term in Ditto. The meaning of the remaining parameters is the same as that of the Pytorch single-machine serial implementation, and will not be described here.
+
+### 5.2 Single-machine, serial implementation (in Tensorflow)
+
+Similarly, first, enter the corresponding path, and then run `main.py` to train/validate/test the model. For example:
+
 ```bash
 cd fed_tf  
 python main.py \
         --dataset CIFAR10 \
         --n_clients 10 \
-        --global_epochs 200 \
+        --rounds 200 \
         --local_epochs 1 \
         --fed_method FedAvg 
 ```
-参数的含义与Pytorch单机串行版本完全相同，此处不再赘述。
 
-### 5.3 Pytorch单机多进程同步版本
+The meaning of the parameters is the same as that of the Pytorch single-machine serial implementation, and will not be described again here.
 
-同样，先进入到对应目录下，然后运行`main.py`来训练/验证/测试模型。例如:
+### 5.3 Single-machine, multi-process implementation (in Pytorch)
+
+Similarly, first, enter the corresponding path, and then run `main.py` to train/validate/test the model. For example:
+
 ```bash
 cd fed_multiprocess_syn
 python main.py \
         --dataset CIFAR10 \
         --n_clients 10 \
-        --global_epochs 200 \
+        --rounds 200 \
         --local_epochs 1 \
         --fed_method FedAvg 
 ```
-参数的含义与Pytorch单机串行版本完全相同，此处也不再赘述。不过在这里需要注意，在我们的实现中一个进程对应一个client，故用户设置的client数量最好不要太大，否则可能会影响并行效率从而接近串行版本。
 
-### 5.4 Pytorch分布式异步版本
+The meaning of the parameters is the same as that of the Pytorch single-machine serial implementation, and will not be described again here. However, it should be noted that in our implementation, one process corresponds to one client, so it is better not to set the number of clients too large, otherwise, it may affect the parallel efficiency and make the parallel implementation the same as the serial version.
 
-同样，先进入到对应目录下，然后运行`main.py`来训练/验证/测试模型。例如:
+### 5.4 Distributed, asynchronous implementation (in Pytorch)
+
+Similarly, first, enter the corresponding path, and then run `main.py` to train/validate/test the model. For example:
+
 ```bash
 cd fed_RPC_asyn
 python main.py \
         --dataset CIFAR10 \
         --n_clients 10 \
-        --global_epochs 200 \
+        --rounds 200 \
         --local_epochs 1 \
         --lam 0.5 \
         --fed_method FedAvg
 ```
-这里参数的含义与前面也相同，不过要多出一个参数 $\lambda$，用于确定在服务端更新模型时，历史模型和新模型对应的加权，更新公式为 $w^{t+1} = w^t + w_{new}$（参照异步联邦学习论文[《Asynchronous federated optimization》](https://arxiv.org/abs/1903.03934)）。我们这里默认通信域大小为`n_clients + 1`，其中rank为0的进程为master，其余为worker，其中master进程IP地址为`localhost`，端口号`29500`，master进程与worker进程之间采用RPC进行通信。
 
+The meaning of the parameters here is the same as before, but there is an additional parameter $\lambda$, which is used to determine the weight corresponding to the historical model and the new model when the server updates the model. The update formula is $w^{t+1} = w^t + w_{new}$ (Refer to the asynchronous federated learning paper [*Asynchronous federated optimization*](https://arxiv.org/abs/1903.03934). The default communication domain size is `n_clients + 1`, the process with rank 0 is the master, and the rest are workers. The IP address of the master process is `localhost`, the port number is `29500`, and RPC is used to communicate between the master process and the worker processes.
 
-## 参考
+## Reference
 
 [1] McMahan B, Moore E, Ramage D, et al. Communication-efficient learning of deep networks from decentralized data[C]//Artificial intelligence and statistics. PMLR, 2017: 1273-1282.
 
 [2] Li T, Sahu A K, Zaheer M, et al. Federated optimization in heterogeneous networks[J]. Proceedings of Machine learning and systems, 2020, 2: 429-450.
+
+[3] Li T, Hu S, Beirami A, et al. Ditto: Fair and robust federated learning through personalization[C]//International Conference on Machine Learning. PMLR, 2021: 6357-6368.
+
+[4] Hsu T M H, Qi H, Brown M. Measuring the effects of non-identical data distribution for federated visual classification[J]. arXiv preprint arXiv:1909.06335, 2019.
