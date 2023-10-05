@@ -55,7 +55,7 @@ def resnet1202(in_channels, num_classes):
     return ResNet(BasicBlock, [200, 200, 200], in_channels, num_classes)
 
 
-def _weights_init(m):
+def _params_init(m):
     classname = m.__class__.__name__
     # print(classname)
     if isinstance(m, nn.Linear) or isinstance(m, nn.Conv2d):
@@ -124,7 +124,7 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
         self.linear = nn.Linear(64, num_classes)
 
-        self.apply(_weights_init)
+        self.apply(_params_init)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)

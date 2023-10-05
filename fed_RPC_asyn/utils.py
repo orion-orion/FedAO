@@ -52,7 +52,7 @@ def load_dataset(args):
             root="./data", download=True, transform=transform, train=False)
     else:
         raise ValueError("Please input the correct dataset name, it must be "
-                         "one of: EMNIST, FashionMNST, CIFAR10, CIFAR100!")
+                         "one of: EMNIST, FashionMNIST, CIFAR10, CIFAR100!")
 
     data_info = {}
     data_info["classes"] = train_data.classes
@@ -115,8 +115,8 @@ def logging(str, log_file):
         "%Y-%m-%d %H:%M:%S"), str), file=log_file)
 
 
-def init_clients_prop(clients):
-    """Compute the proportion of the samples of each client to all samples.
+def init_clients_weights(clients):
+    """Initialize the aggretation weight.
     """
     client_n_samples_train = [client.n_samples_train for client in clients]
     client_n_samples_valid = [client.n_samples_valid for client in clients]
@@ -126,6 +126,6 @@ def init_clients_prop(clients):
     samples_sum_valid = np.sum(client_n_samples_valid)
     samples_sum_test = np.sum(client_n_samples_test)
     for client in clients:
-        client.train_prop = client.n_samples_train/samples_sum_train
-        client.valid_prop = client.n_samples_valid/samples_sum_valid
-        client.test_prop = client.n_samples_test/samples_sum_test
+        client.train_weight = client.n_samples_train/samples_sum_train
+        client.valid_weight = client.n_samples_valid/samples_sum_valid
+        client.test_weight = client.n_samples_test/samples_sum_test

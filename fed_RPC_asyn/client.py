@@ -17,7 +17,9 @@ class Client(object):
         # the model is not allocated on the GPU when it is initialized, and
         # then moved to the GPU when it is trained later
         self.model = model_fn()
+        self.per_model = model_fn()
         self.optimizer = optimizer_fn(self.model.parameters())
+        self.per_optimizer = optimizer_fn(self.per_model.parameters())
         self.server_rref = server_rref
 
         self.train_dataloader = DataLoader(
@@ -27,9 +29,8 @@ class Client(object):
         self.test_dataloader = DataLoader(
             test_dataset, batch_size=args.batch_size, shuffle=False)
 
-        # Initialize the proportion of the samples of each client to all
-        # samples
-        self.train_pop, self.valid_prop, self.test_prop = 0.0, 0.0, 0.0
+        # The aggretation weight
+        self.train_pop, self.valid_weight, self.test_weight = 0.0, 0.0, 0.0
 
         # Compute the number of samples for each client
         self.n_samples_train = len(train_dataset)
@@ -38,26 +39,27 @@ class Client(object):
         self.n_samples_test = len(test_dataset)
 
     def train(self, c_id, args):
-        """Train one client with its own data for one epoch.
+        """Train one client with its own data for local epochs.
 
         Args:
-            c_id: client ID.
-            args: other parameters for training.
+            c_id: Client ID.
+            args: Other parameters for training.
         """
         self.log_file = open(os.path.join(
             args.log_dir, args.dataset + ".log"), "a+")
 
         torch.manual_seed(args.seed + c_id)
         self.model.train()
-        for epoch in range(1, args.global_epochs + 1):
-            global_weights = rpc.rpc_sync(
+        for round in range(1, args.rounds + 1):
+            global_params = rpc.rpc_sync(
                 self.server_rref.owner(),
                 Server.update_and_fetch_model,
                 # Note that RPC only supports CPU
-                args=(self.server_rref, self.get_client_weights()),
+                args=(self.server_rref, self.get_params()),
             )
-            self.set_global_weights(global_weights)
+            self.set_params(global_params)
             self.model.to(self.device)  # move the model to the GPU
+            self.per_model.to(self.device)  # move the model to the GPU
 
             for _ in range(args.local_epochs):
                 loss, n_samples = 0.0, 0
@@ -67,30 +69,47 @@ class Client(object):
 
                     # The `CrossEntropyLoss` function in Pytorch will divide
                     # by the mini-batch size by default
-                    l = torch.nn.CrossEntropyLoss()(self.model(x), y)
+                    batch_loss = torch.nn.CrossEntropyLoss()(self.model(x), y)
                     if args.fed_method == "FedProx":
-                        l += self.prox_reg(dict(self.model.named_parameters()),
-                                           global_weights, args.mu)
+                        batch_loss += self.prox_reg(dict(
+                            self.model.named_parameters()),
+                            global_params, args.mu)
 
-                    l.backward()
+                    batch_loss.backward()
                     self.optimizer.step()
 
-                    loss += l.item() * y.shape[0]
+                    if args.fed_method == "Ditto":
+                        # Update the personalized model
+                        self.per_optimizer.zero_grad()
+
+                        batch_per_loss = torch.nn.CrossEntropyLoss()(
+                            self.per_model(x), y)
+                        batch_per_loss += self.prox_reg(dict(
+                            self.per_model.named_parameters()),
+                            global_params, args.lam)
+
+                        batch_per_loss.backward()
+                        self.per_optimizer.step()
+
+                        loss += batch_per_loss.item() * y.shape[0]
+                    else:
+                        loss += batch_loss.item() * y.shape[0]
+
                     n_samples += y.shape[0]
 
                 gc.collect()
-            logging("Global epoch {}/{} - client {} -  Training Loss: {:.3f}"
-                    .format(epoch, args.global_epochs, c_id, loss/n_samples),
+            logging("Training round {}/{} - client {} -  Training Loss: {:.3f}"
+                    .format(round, args.rounds, c_id, loss/n_samples),
                     self.log_file)
 
-            if args.valid_frac > 0 and epoch % args.eval_interval == 0:
-                self.evaluation(c_id, args, epoch, mode="valid")
+            if args.valid_frac > 0 and round % args.eval_interval == 0:
+                self.evaluation(c_id, args, round, mode="valid")
 
     @ staticmethod
     def flatten(params):
         return torch.cat([param.flatten() for param in params])
 
-    def prox_reg(self, params1, params2, mu):
+    def prox_reg(self, params1, params2, weight_factor):
         # The parameters returned by `named_parameters()` should be rearranged
         # according to the keys of the parameters returned by `state_dict()`.
         # Note that params2 should be moved to the device used first
@@ -100,16 +119,16 @@ class Client(object):
         # Multi-dimensional parameters should be flattened into one-dimensional
         vec1 = self.flatten(params1.values())
         vec2 = self.flatten(params2_values)
-        return mu / 2 * torch.norm(vec1 - vec2)**2
+        return weight_factor / 2 * torch.norm(vec1 - vec2)**2
 
     def evaluation(self, c_id, args, epoch=0, mode="valid"):
-        """Evaluation one client with its own data for one epoch.
+        """Evaluation one client with its own data.
 
         Args:
-            c_id: client ID.
-            args: evaluation arguments.
-            epoch: current global epoch.
-            mode: choose valid or test mode.
+            c_id: Client ID.
+            args: Evaluation arguments.
+            round: Current training round.
+            mode: Choose valid or test mode.
         """
         if mode == "valid":
             dataloader = self.valid_dataloader
@@ -122,7 +141,11 @@ class Client(object):
             for x, y in dataloader:
                 x, y = x.to(self.device), y.to(self.device)
 
-                y_hat = self.model(x)
+                if args.fed_method == "Ditto":
+                    y_hat = self.model(x)
+                else:
+                    y_hat = self.model(x)
+
                 pred = torch.argmax(y_hat.data, 1)
 
                 correct += (pred == y).sum().item()
@@ -132,19 +155,19 @@ class Client(object):
         self.acc = correct/n_samples
 
         if mode == "valid":
-            logging("Global epoch {}/{} - client {} -  Valid ACC: {:.4f}".format(epoch,
-                    args.global_epochs, c_id, self.acc), self.log_file)
+            logging("Training round {}/{} - client {} -  Valid ACC: {:.4f}".format(epoch,
+                    args.rounds, c_id, self.acc), self.log_file)
         else:
             logging("Final - client {} -  Test ACC: {:.4f}".format(c_id,
                     self.acc), self.log_file)
 
         if mode == "valid":
-            return self.acc * self.valid_prop
+            return self.acc * self.valid_weight
         elif mode == "test":
-            return self.acc * self.test_prop
+            return self.acc * self.test_weight
 
-    def get_client_weights(self):
-        """Returns all of the weights in `OrderedDict` format. Note that
+    def get_params(self):
+        """Returns all of the parameters in `OrderedDict` format. Note that
         the `state_dict()` function returns the reference of the model
         parameters. In consideration of computational efficiency, here we
         choose to keep the reference.In addition, it should be noted that
@@ -152,7 +175,7 @@ class Client(object):
         """
         return self.model.cpu().state_dict()
 
-    def set_global_weights(self, global_weights):
-        """Assigns all of the weights with global weights.
+    def set_params(self, global_params):
+        """Assigns all of the parameters with global parameters.
         """
-        self.model.load_state_dict(global_weights)
+        self.model.load_state_dict(global_params)

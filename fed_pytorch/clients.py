@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import math
 import gc
+import copy
 import logging
 import numpy as np
 import torch
@@ -28,34 +29,37 @@ class Clients:
                                             shuffle=False)
                                  for c_id in range(args.n_clients)]
 
-        # Compute the proportion of the samples of each client to all samples
+        # Initialize the aggretation weight
         client_n_samples_train = [len(train_datasets[c_id])
                                   for c_id in range(args.n_clients)]
         samples_sum_train = sum(client_n_samples_train)
-        self.client_train_prop = [
+        self.client_train_weight = [
             len(train_datasets[c_id])/samples_sum_train
             for c_id in range(args.n_clients)]
         if args.valid_frac > 0:
             client_n_samples_valid = [len(valid_datasets[c_id])
                                       for c_id in range(args.n_clients)]
             samples_sum_valid = sum(client_n_samples_valid)
-            self.client_valid_prop = [len(valid_datasets[c_id])
-                                      / samples_sum_valid
-                                      for c_id in range(args.n_clients)]
+            self.client_valid_weight = [len(valid_datasets[c_id])
+                                        / samples_sum_valid
+                                        for c_id in range(args.n_clients)]
         client_n_samples_test = [len(test_datasets[c_id])
                                  for c_id in range(args.n_clients)]
         samples_sum_test = sum(client_n_samples_test)
-        self.client_test_prop = [len(test_datasets[c_id]) / samples_sum_test
-                                 for c_id in range(args.n_clients)]
+        self.client_test_weight = [len(test_datasets[c_id]) / samples_sum_test
+                                   for c_id in range(args.n_clients)]
 
-    def train_epoch(self, c_id, epoch, args, global_weights):
-        """Train one client with its own data for one epoch.
+    def train_epochs(self, c_id, round, args, global_params, per=False):
+        """Train one client with its own data for local epochs.
 
         Args:
-            c_id: client ID.
-            epoch: current global epoch.
-            args: other parameters for training.
-            global_weights: global model weights used in `FedProx` method.
+            c_id: Client ID.
+            round: Current training round.
+            args: Other parameters for training.
+            global_params: Global model parameters used in `FedProx` of `Ditto`
+                method.
+            per: A flag varaible indicating whether a personalized model in
+                `Ditto` method is being trained.
         """
         self.model.train()
         for _ in range(args.local_epochs):
@@ -66,28 +70,34 @@ class Clients:
 
                 # The `CrossEntropyLoss` function in Pytorch will divide by
                 # the mini-batch size by default
-                l = torch.nn.CrossEntropyLoss()(self.model(x), y)
+                batch_loss = torch.nn.CrossEntropyLoss()(self.model(x), y)
                 if args.fed_method == "FedProx":
-                    l += self.prox_reg(dict(self.model.named_parameters()),
-                                       global_weights, args.mu)
+                    batch_loss += self.prox_reg(dict(
+                        self.model.named_parameters()),
+                        global_params, args.mu)
+                elif args.fed_method == "Ditto" and per:
+                    batch_loss += self.prox_reg(dict(
+                        self.model.named_parameters()),
+                        global_params, args.lam)
 
-                l.backward()
+                batch_loss.backward()
                 self.optimizer.step()
 
-                loss += l.item() * y.shape[0]
+                loss += batch_loss.item() * y.shape[0]
                 n_samples += y.shape[0]
 
             gc.collect()
-        logging.info("Global epoch {}/{} - client {} -  Training Loss: {:.3f}"
-                     .format(epoch, args.global_epochs, c_id,
-                             loss / n_samples))
+        if not (args.fed_method == "Ditto") or per:
+            logging.info("Training round {}/{} - client {} -  Training Loss: "
+                         "{:.3f}".format(round, args.rounds, c_id,
+                                         loss / n_samples))
         return n_samples
 
     @ staticmethod
     def flatten(params):
         return torch.cat([param.flatten() for param in params])
 
-    def prox_reg(self, params1, params2, mu):
+    def prox_reg(self, params1, params2, weight_factor):
         # The parameters returned by `named_parameters()` should be rearranged
         # according to the keys of the parameters returned by `state_dict()`
         params2_values = [params2[key] for key in params1.keys()]
@@ -95,14 +105,14 @@ class Clients:
         # Multi-dimensional parameters should be flattened into one-dimensional
         vec1 = self.flatten(params1.values())
         vec2 = self.flatten(params2_values)
-        return mu / 2 * torch.norm(vec1 - vec2)**2
+        return weight_factor / 2 * torch.norm(vec1 - vec2)**2
 
     def evaluation(self, c_id, mode="valid"):
-        """Evaluation one client with its own data for one epoch.
+        """Evaluation one client with its own data.
 
         Args:
-            c_id: client ID.
-            mode: choose valid or test mode.
+            c_id: Client ID.
+            mode: Choose valid or test mode.
         """
         if mode == "valid":
             dataloader = self.valid_dataloaders[c_id]
@@ -126,22 +136,21 @@ class Clients:
         return {"ACC": self.acc}
 
     def get_old_eval_log(self):
-        """Returns the evaluation result of the lastest epoch.
+        """Returns the evaluation result of the lastest round.
         """
         return {"ACC": self.acc}
 
-    def get_client_weights(self):
-        """Returns all of the weights in `OrderedDict` format. Note that
+    def get_params(self):
+        """Returns all of the parameters in `OrderedDict` format. Note that
         the `state_dict()` function returns the reference of the model
-        parameters. In consideration of computational efficiency, here we
-        choose to keep the reference.
+        parameters, so here we use deep copy.
         """
-        return self.model.state_dict()
+        return copy.deepcopy(self.model.state_dict())
 
-    def set_global_weights(self, global_weights):
-        """Assigns all of the weights with global weights.
+    def set_params(self, params):
+        """Assigns all of the old parameters with new parameters.
         """
-        self.model.load_state_dict(global_weights)
+        self.model.load_state_dict(params)
 
     def choose_clients(self, ratio=1.0):
         """Randomly chooses some clients.

@@ -18,8 +18,7 @@ def arg_parse():
 
     # Dataset part
     parser.add_argument("--dataset", type=str, default="CIFAR10",
-                        help="dataset, possible are `EMNIST`, `FashionMNST`,"
-                             "`CIFAR10`, `CIFAR100`")
+                        help="dataset, possible are `CIFAR10`, `CIFAR100`")
     parser.add_argument("--n_clients", type=int, default=10)
     parser.add_argument(
         "--train_frac", help="fraction of training samples", type=float,
@@ -38,7 +37,7 @@ def arg_parse():
                         "client; ignored if `--pathological_split` is not"
                         "used; default is 2", type=int, default=2)
     parser.add_argument(
-        "--alpha", help="the parameter of dirichalet", type=float, default=1.0)
+        "--alpha", help="the parameter of dirichalet", type=float, default=0.1)
 
     # Training part
     parser.add_argument("--lr", type=float, default=0.001,
@@ -52,17 +51,19 @@ def arg_parse():
                         default="log", help="directory of logs")
     parser.add_argument("--frac", type=float, default=1,
                         help="fraction of participating clients")
-    parser.add_argument("--global_epochs", type=int,
-                        default=200, help="the number of epochs")
+    parser.add_argument("--rounds", type=int,
+                        default=200, help="number of training rounds")
     parser.add_argument("--local_epochs", type=int, default=1,
                         help="number of local training epochs")
     parser.add_argument("--eval_interval", type=int,
                         default=1, help="interval of evalution")
     parser.add_argument("--seed", type=int, default=42, help="random seed")
     parser.add_argument("--fed_method", type=str,
-                        default="FedAvg", help="`FedAvg` or `FedProx`")
+                        default="FedAvg", help="`FedAvg`, `FedProx` or `Ditto`")
     parser.add_argument("--mu", type=float, default=0.01,
                         help="constant for proximal in `FedProx` method")
+    parser.add_argument("--lam", type=float, default=0.1,
+                        help="constant for proximal in `Ditto` method")      
 
     args = parser.parse_args()
     return args
@@ -101,7 +102,7 @@ def main():
     init_logger(args)
 
     client_train_datasets, client_valid_datasets, client_test_datasets, \
-        data_info = load_dataset(args)
+        data_info = load_dataset(args)     
 
     clients = Clients(lambda graph:
                       resnet20(graph, args, lambda: AdamOptimizer(

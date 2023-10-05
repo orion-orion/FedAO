@@ -6,7 +6,7 @@ from client import Client
 from server import Server
 import torch.distributed.rpc as rpc
 import os
-from utils import load_dataset, init_clients_prop
+from utils import load_dataset, init_clients_weights
 from model import resnet20
 
 
@@ -40,8 +40,8 @@ def run_server(clients_name, args):
         client_train_datasets[c_id], client_valid_datasets[c_id],
         client_test_datasets[c_id]) for c_id in range(args.n_clients)]
 
-    # Compute the proportion of the samples of each client to all samples
-    init_clients_prop(clients)
+    # Initialize the aggretation weight
+    init_clients_weights(clients)
 
     futs = []
     for c_id, client_name in enumerate(clients_name):

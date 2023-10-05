@@ -65,11 +65,11 @@ class ResNet(tf.Module):
                              self.in_channels], name="x")
             self.y = tf.compat.v1.placeholder(
                 tf.float32, [None, self.num_classes], name="y")
-            if self.fed_method == "FedProx":
-                # global weights flattened into a one-dimensional vector
+            if self.fed_method == "FedProx" or self.fed_method == "Ditto":
+                # global parameters flattened into a one-dimensional vector
                 self.global_w_vec = tf.placeholder(
                     dtype=tf.float32, shape=[None], name="global_w_vec")
-                self.mu = tf.placeholder(dtype=tf.float32, name="mu")
+                self.weight_factor = tf.placeholder(dtype=tf.float32, name="weight_factor")
 
             self.in_planes = 16
 
@@ -105,7 +105,7 @@ class ResNet(tf.Module):
                     self.local_w_vec = self.flatten(
                         tf.compat.v1.trainable_variables())
                     self.loss_op += self.prox_reg(self.local_w_vec,
-                                                  self.global_w_vec, self.mu)
+                                                  self.global_w_vec, self.weight_factor)
 
             with tf.compat.v1.variable_scope("optimizer"):
                 self.train_op = self.optimizer.minimize(self.loss_op)
@@ -159,8 +159,8 @@ class ResNet(tf.Module):
                              axis=0)
 
     @ staticmethod
-    def prox_reg(w_vec_1, w_vec_2, mu):
-        return mu / 2 * tf.norm(w_vec_1 - w_vec_2)**2  # tf.norm(）
+    def prox_reg(w_vec_1, w_vec_2, weight_factor):
+        return weight_factor / 2 * tf.norm(w_vec_1 - w_vec_2)**2  # tf.norm(）
 
 
 def variable_weight(name, shape, initializer, trainable=True):

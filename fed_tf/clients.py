@@ -27,32 +27,35 @@ class Clients:
         self.valid_datasets = valid_datasets
         self.test_datasets = test_datasets
 
-        # Compute the proportion of the samples of each client to all samples
+        # Initialize the aggretation weight
         client_n_samples_train = [len(train_dataset[0])
                                   for train_dataset in self.train_datasets]
         samples_sum_train = sum(client_n_samples_train)
-        self.client_train_prop = [len(train_dataset[0])/samples_sum_train
-                                  for train_dataset in self.train_datasets]
+        self.client_train_weight = [len(train_dataset[0])/samples_sum_train
+                                    for train_dataset in self.train_datasets]
         if args.valid_frac > 0:
             client_n_samples_valid = [len(valid_dataset[0])
                                       for valid_dataset in self.valid_datasets]
             samples_sum_valid = sum(client_n_samples_valid)
-            self.client_valid_prop = [len(valid_dataset[0])/samples_sum_valid
-                                      for valid_dataset in self.valid_datasets]
+            self.client_valid_weight = [len(valid_dataset[0])/samples_sum_valid
+                                        for valid_dataset
+                                        in self.valid_datasets]
         client_n_samples_test = [len(test_dataset[0])
                                  for test_dataset in self.test_datasets]
         samples_sum_test = sum(client_n_samples_test)
-        self.client_test_prop = [len(test_dataset[0])/samples_sum_test
-                                 for test_dataset in self.test_datasets]
+        self.client_test_weight = [len(test_dataset[0])/samples_sum_test
+                                   for test_dataset in self.test_datasets]
 
-    def train_epoch(self, c_id, epoch, args, global_weights):
-        """Train one client with its own data for one epoch.
+    def train_epochs(self, c_id, round, args, global_params, per=True):
+        """Train one client with its own data for local epochs.
 
         Args:
-            c_id: client ID.
-            epoch: current global epoch.
-            args: other parameters for training.
-            global_weights: global model weights used in `FedProx` method.
+            c_id: Client ID.
+            round: Current training round.
+            args: Other parameters for training.
+            global_params: Global model parameters used in `FedProx` method.
+            per: A flag varaible indicating whether a personalized model in
+                `Ditto` method is being trained.
         """
         dataset = self.train_datasets[c_id]
         with self.graph.as_default():
@@ -65,29 +68,35 @@ class Clients:
                         # Multi-dimensional parameters should be flattened
                         # into one-dimensional before computing the proximal
                         # regularizer
-                        feed_dict.update({self.model.global_w_vec: self.model
-                                          .flatten(global_weights),
-                                          self.model.mu: args.mu})
+                        feed_dict.update({self.model.global_w_vec:
+                                          self.model.flatten(global_params),
+                                          self.model.weight_factor: args.mu})
+                    elif args.fed_method == "Ditto" and per:
+                        feed_dict.update({self.model.global_w_vec:
+                                          self.model.flatten(global_params),
+                                          self.model.weight_factor: args.lam})
 
-                    l, _ = self.sess.run([self.model.loss_op, self.model
-                                          .train_op], feed_dict=feed_dict)
+                    batch_loss, _ = self.sess.run([self.model.loss_op,
+                                                   self.model.train_op],
+                                                  feed_dict=feed_dict)
 
-                    loss += l * y.shape[0]
+                    loss += batch_loss * y.shape[0]
                     n_samples += y.shape[0]
 
             gc.collect()
-        logging.info("Global epoch {}/{} - client {} -  Training Loss: {:.3f}"
-                     .format(epoch, args.global_epochs, c_id, loss
-                             / n_samples))
+        if not (args.fed_method == "Ditto") or per:
+            logging.info("Training round {}/{} - client {} -  Training Loss: "
+                         "{:.3f}".format(round, args.rounds, c_id, loss
+                                         / n_samples))
         return n_samples
 
     def evaluation(self, c_id, args, mode="valid"):
-        """Evaluation one client with its own data for one epoch.
+        """Evaluation one client with its own data.
 
         Args:
-            c_id: client ID.
-            args: evaluation arguments.
-            mode: choose valid or test mode.
+            c_id: Client ID.
+            args: Evaluation arguments.
+            mode: Choose valid or test mode.
         """
         if mode == "valid":
             dataset = self.valid_datasets[c_id]
@@ -112,25 +121,25 @@ class Clients:
         return {"ACC": self.acc}
 
     def get_old_eval_log(self):
-        """Returns the evaluation result of the lastest epoch.
+        """Returns the evaluation result of the lastest round.
         """
         return {"ACC": self.acc}
 
-    def get_client_weights(self):
-        """Returns all of the weights in `list`.
+    def get_params(self):
+        """Returns all of the parameters in `list`.
         """
         with self.graph.as_default():
-            client_weights = self.sess.run(tf.compat.v1.trainable_variables())
-        return client_weights
+            client_params = self.sess.run(tf.compat.v1.trainable_variables())
+        return client_params
 
-    def set_global_weights(self, global_weights):
-        """Assigns all of the variables with global weights. Note that
+    def set_params(self, global_params):
+        """Assigns all of the variables with global parameters. Note that
         different from the Pytorch version, `sess.run()` in tensorflow will
         get a copy of the evaluated model parameters on the CPU.
         """
         with self.graph.as_default():
-            all_weights = tf.compat.v1.trainable_variables()
-            for variable, value in zip(all_weights, global_weights):
+            all_params = tf.compat.v1.trainable_variables()
+            for variable, value in zip(all_params, global_params):
                 variable.load(value, self.sess)
 
     def choose_clients(self, ratio=1.0):

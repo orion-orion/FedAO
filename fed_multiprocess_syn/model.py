@@ -55,7 +55,7 @@ def resnet1202(in_channels, num_classes):
     return ResNet(BasicBlock, [200, 200, 200], in_channels, num_classes)
 
 
-def _weights_init(m):
+def _params_init(m):
     classname = m.__class__.__name__
     # print(classname)
     if isinstance(m, nn.Linear) or isinstance(m, nn.Conv2d):
@@ -77,7 +77,8 @@ class BasicBlock(nn.Module):
     def __init__(self, in_planes, planes, stride=1, option="B"):
         super(BasicBlock, self).__init__()
         self.conv1 = nn.Conv2d(
-            in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+            in_planes, planes, kernel_size=3, stride=stride, padding=1,
+            bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3,
                                stride=1, padding=1, bias=False)
@@ -89,7 +90,9 @@ class BasicBlock(nn.Module):
                 """For CIFAR10 ResNet paper uses option A.
                 """
                 self.shortcut = LambdaLayer(lambda x:
-                                            F.pad(x[:, :, ::2, ::2], (0, 0, 0, 0, planes//4, planes//4), "constant", 0))
+                                            F.pad(x[:, :, ::2, ::2],
+                                                  (0, 0, 0, 0, planes//4,
+                                                   planes//4), "constant", 0))
             elif option == "B":
                 self.shortcut = nn.Sequential(
                     nn.Conv2d(in_planes, self.expansion * planes,
@@ -124,7 +127,7 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
         self.linear = nn.Linear(64, num_classes)
 
-        self.apply(_weights_init)
+        self.apply(_params_init)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)

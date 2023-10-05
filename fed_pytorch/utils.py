@@ -51,8 +51,8 @@ def load_dataset(args):
         test_data = datasets.CIFAR100(
             root="./data", download=True, transform=transform, train=False)
     else:
-        raise ValueError("Please input the correct dataset name, it must be one of:"
-                         "EMNIST, FashionMNST, CIFAR10, CIFAR100!")
+        raise ValueError("Please input the correct dataset name, it must be"
+                         "one of: EMNIST, FashionMNIST, CIFAR10, CIFAR100!")
 
     data_info = {}
     data_info["classes"] = train_data.classes
